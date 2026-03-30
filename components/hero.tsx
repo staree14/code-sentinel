@@ -7,13 +7,13 @@ import dynamic from "next/dynamic";
 const HeroShape = dynamic(() => import("./hero-shape"), { ssr: false });
 
 const HEADING_WORDS = [
-  { text: "CODE",     color: "var(--text)"  },
+  { text: "CODE", color: "var(--text)" },
   { text: "SENTINEL", color: "var(--green)" },
 ];
 
 const letterVariant = {
   hidden: { y: 20, opacity: 0 },
-  show:   { y: 0,  opacity: 1 },
+  show: { y: 0, opacity: 1 },
 };
 
 export function Hero() {
@@ -113,7 +113,7 @@ export function Hero() {
             <Link href="/demo" className="btn-primary-pixel">
               ► TRY LIVE DEMO
             </Link>
-            <a href="#how-it-works" className="btn-secondary-pixel">
+            <a href="/architecture" className="btn-secondary-pixel">
               VIEW ARCHITECTURE
             </a>
           </motion.div>
@@ -126,8 +126,8 @@ export function Hero() {
             className="flex flex-wrap gap-8"
           >
             {[
-              { value: "87%",   label: "cost savings" },
-              { value: "< 3s",  label: "analysis time" },
+              { value: "87%", label: "cost savings" },
+              { value: "< 3s", label: "analysis time" },
               { value: "6-step", label: "ai pipeline" },
             ].map(({ value, label }) => (
               <div key={label}>

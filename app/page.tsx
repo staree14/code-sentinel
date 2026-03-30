@@ -329,12 +329,12 @@ function CtaSection() {
         </p>
         <h2
           className="font-press-start mb-6"
-          style={{ fontSize: "clamp(1rem, 2.5vw, 1.8rem)", color: "var(--text)", lineHeight: 1.8 }}
+          style={{ fontSize: "clamp(0.8rem, 2vw, 1.4rem)", color: "var(--text)", lineHeight: 1.8 }}
         >
           AUTOMATED CODEBASE SECURITY
         </h2>
         <p
-          className="font-ibm-plex text-base mb-10 leading-relaxed"
+          className="font-ibm-plex text-sm mb-10 leading-relaxed"
           style={{ color: "var(--muted)" }}
         >
           Our Security Agent automatically analyzes your entire codebase in the background. No more repetitive prompting or manual copy-pasting—just continuous, AI-powered protection.

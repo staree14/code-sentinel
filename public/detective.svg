@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Magnifying glass handle -->
+  <path d="M68 68 L90 90" stroke="#39d353" stroke-width="8" stroke-linecap="round"/>
+  
+  <!-- Magnifying glass circle -->
+  <circle cx="45" cy="45" r="32" stroke="#39d353" stroke-width="8" fill="#0d1117" />
+  
+  <!-- The Eye inside -->
+  <path d="M20 45 C35 25, 55 25, 70 45 C55 65, 35 65, 20 45 Z" stroke="#39d353" stroke-width="4" stroke-linejoin="round" fill="rgba(57,211,83,0.15)" />
+  <circle cx="45" cy="45" r="8" fill="#39d353" />
+
+  <!-- Lens glint -->
+  <path d="M25 32 Q35 18 52 20" stroke="rgba(57,211,83,0.6)" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

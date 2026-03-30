@@ -2,26 +2,242 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── CSS DESIGN TOKENS ──────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg:          #0d1117;
+  --bg2:         #161b22;
+  --bg3:         #21262d;
+  --text:        #e6edf3;
+  --muted:       #c9d1d9;
+  --green:       #39d353;
+  --red:         #f85149;
+  --yellow:      #d29922;
+  --blue:        #58a6ff;
+  --purple:      #bc8cff;
+  --border:      #30363d;
+  --aws-orange:  #FF9900;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ibm-plex), 'IBM Plex Mono', monospace;
+  -webkit-font-smoothing: antialiased;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+/* ── PIXEL BORDER UTILITIES ─────────────────────────────────────────── */
+.pixel-border {
+  box-shadow:
+    -2px 0 0 0 var(--border),
+     2px 0 0 0 var(--border),
+     0 -2px 0 0 var(--border),
+     0  2px 0 0 var(--border);
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.pixel-border-green {
+  box-shadow:
+    -2px 0 0 0 var(--green),
+     2px 0 0 0 var(--green),
+     0 -2px 0 0 var(--green),
+     0  2px 0 0 var(--green),
+     0 0 20px rgba(57, 211, 83, 0.3);
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.pixel-border-purple {
+  box-shadow:
+    -2px 0 0 0 var(--purple),
+     2px 0 0 0 var(--purple),
+     0 -2px 0 0 var(--purple),
+     0  2px 0 0 var(--purple),
+     0 0 20px rgba(188, 140, 255, 0.3);
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+/* ── PIXEL BUTTONS ──────────────────────────────────────────────────── */
+.btn-primary-pixel {
+  background: var(--green);
+  color: var(--bg);
+  font-family: var(--font-press-start), 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  padding: 0.9rem 1.8rem;
+  border: none;
+  border-radius: 0;
+  box-shadow: 4px 4px 0px #1a7a2e;
+  transition: transform 0.1s, box-shadow 0.1s;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.btn-primary-pixel:hover {
+  transform: translateY(-2px);
+  box-shadow: 6px 6px 0px #1a7a2e;
+}
+
+.btn-primary-pixel:active {
+  transform: translateY(2px);
+  box-shadow: 2px 2px 0px #1a7a2e;
+}
+
+.btn-secondary-pixel {
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-press-start), 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  padding: calc(0.9rem - 2px) calc(1.8rem - 2px);
+  border: 2px solid var(--border);
+  border-radius: 0;
+  box-shadow: 4px 4px 0px var(--border);
+  transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s, color 0.1s;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.btn-secondary-pixel:hover {
+  border-color: var(--green);
+  color: var(--green);
+  box-shadow: 4px 4px 0px #1a7a2e;
+  transform: translateY(-2px);
+}
+
+.btn-secondary-pixel:active {
+  transform: translateY(2px);
+  box-shadow: 2px 2px 0px #1a7a2e;
+}
+
+/* ── SEVERITY BADGES ────────────────────────────────────────────────── */
+.badge {
+  font-family: var(--font-press-start), 'Press Start 2P', cursive;
+  font-size: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0;
+  letter-spacing: 0.05em;
+  display: inline-block;
+}
+
+.badge-critical { background: var(--red);    color: var(--bg); }
+.badge-high     { background: var(--yellow); color: var(--bg); }
+.badge-medium   { background: var(--blue);   color: var(--bg); }
+.badge-low      { background: var(--border); color: var(--text); }
+.badge-safe     { background: var(--green);  color: var(--bg); }
+
+/* ── ANIMATIONS ─────────────────────────────────────────────────────── */
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes pixel-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1;   }
+}
+
+.animate-pixel-pulse {
+  animation: pixel-pulse 2s ease-in-out infinite;
+}
+
+/* Dashed line animation for routing connectors */
+@keyframes dash-flow {
+  0%   { background-position: 0 0; }
+  100% { background-position: 24px 0; }
+}
+
+.animate-dash {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--green) 0px,
+    var(--green) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  background-size: 12px 2px;
+  background-repeat: repeat-x;
+  background-position: center;
+  height: 2px;
+  animation: dash-flow 0.5s linear infinite;
+}
+
+/* Code-editor scan line — keep for demo page */
+@keyframes scan-down {
+  0%   { top: -2px;  }
+  100% { top: 100%;  }
+}
+
+.scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--green), var(--blue), transparent);
+  box-shadow: 0 0 12px rgba(57, 211, 83, 0.8);
+  animation: scan-down 1.8s linear infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── TYPOGRAPHY ─────────────────────────────────────────────────────── */
+/* Press Start 2P usage: headings, labels, badges */
+.pixelated-text,
+.font-press-start {
+  font-family: var(--font-press-start), 'Press Start 2P', cursive !important;
+  letter-spacing: 0.05em;
+  line-height: 2;
+}
+
+/* IBM Plex Mono usage: body, descriptions */
+.font-ibm-plex {
+  font-family: var(--font-ibm-plex), 'IBM Plex Mono', monospace !important;
+  line-height: 1.8;
+  font-size: 1.05em;
+}
+
+/* ── LEGACY UTILITIES (keep for demo page) ──────────────────────────── */
+.glass {
+  background: rgba(22, 27, 34, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--green), var(--blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── SCROLLBAR ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── MOBILE ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .pixelated-text,
+  .font-press-start {
+    font-size: 0.72em;
   }
 }

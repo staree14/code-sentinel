@@ -1,0 +1,33 @@
+{
+    "application_code": [
+        "Check for hardcoded passwords, API keys, tokens",
+        "Check for SQL injection: string concatenation in queries",
+        "Check for XSS: unsanitized user input in HTML",
+        "Check for insecure JWT: hardcoded secrets, none algorithm",
+        "Check for debug mode enabled in production",
+        "Check for insecure deserialization",
+        "Check for path traversal vulnerabilities",
+        "Check for insecure random number generation for security",
+        "Check for missing input validation",
+        "Check for logging sensitive data"
+    ],
+    "infrastructure": [
+        "Check for S3 buckets with public access enabled",
+        "Check for security groups with 0.0.0.0/0 on sensitive ports",
+        "Check for RDS instances not in VPC",
+        "Check for unencrypted EBS volumes",
+        "Check for CloudFormation stacks without deletion policy",
+        "Check for unencrypted RDS storage",
+        "Check for missing CloudTrail logging",
+        "Check for VPC without flow logs"
+    ],
+    "iam_policies": [
+        "Check for Action: * (wildcard permissions)",
+        "Check for Resource: * combined with sensitive actions",
+        "Check for iam:PassRole without conditions",
+        "Check for inline policies instead of managed policies",
+        "Check for missing MFA requirement on sensitive actions",
+        "Check for overly permissive s3:* or ec2:* permissions",
+        "Check for missing least privilege principle"
+    ]
+}

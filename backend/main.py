@@ -2,7 +2,13 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
+import os
+from dotenv import load_dotenv
 import logging
+
+# Load environment variables
+load_dotenv()
+
 from security_agent import scan_code
 
 # Configure basic logging
@@ -24,8 +30,13 @@ class ScanRequest(BaseModel):
     code: str
     
 class Vulnerability(BaseModel):
-    vulnerability: str
+    id: str
+    title: str
     severity: str
+    line: int
+    category: str
+    cwe: str
+    description: str
     fix: str
 
 class ScanResponse(BaseModel):

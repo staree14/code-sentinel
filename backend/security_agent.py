@@ -37,8 +37,13 @@ def scan_code(code_text: str) -> list:
     Each vulnerability in the array MUST follow this exact schema:
     [
       {{
-        "vulnerability": "Descriptive title of the issue",
+        "id": "V-001",
+        "title": "Descriptive title of the issue",
         "severity": "CRITICAL, HIGH, MEDIUM, or LOW",
+        "line": 10,
+        "category": "e.g. Injection, Secrets Management, etc.",
+        "cwe": "CWE-XXX",
+        "description": "Short explanation of the risk",
         "fix": "Specific remediated code snippet or actionable advice"
       }}
     ]

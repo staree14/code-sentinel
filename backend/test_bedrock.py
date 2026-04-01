@@ -6,7 +6,7 @@ bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
 body = json.dumps({
     "anthropic_version": "bedrock-2023-05-31",
     "max_tokens": 1000,
-    "messages": [{"role": "user", "content": "i committed my env file to git what to do?"}],
+    "messages": [{"role": "user", "content": "Say hello!"}],
     "temperature": 1.0
 })
 

@@ -93,6 +93,9 @@ class Vulnerability(BaseModel):
     cwe: Optional[str] = None
     description: str
     fix: str
+    original_snippet: Optional[str] = None
+    fixed_snippet: Optional[str] = None
+    raw_debug: Optional[str] = None
 
 class ScanResponse(BaseModel):
     status: str
@@ -253,7 +256,28 @@ async def analyze_code(request: ScanRequest, background_tasks: BackgroundTasks):
         if not request.code or request.code.strip() == "":
             raise HTTPException(status_code=400, detail="Code cannot be empty")
             
-        results = scan_code(request.code)
+        # Try scanning with Bedrock (LLM)
+        try:
+            results = scan_code(request.code)
+        except Exception as e:
+            logger.warning(f"Bedrock scan failed: {str(e)}. Falling back to local engine.")
+            from analyzer import analyze
+            # Use 'internal' as a generic extension for local routing
+            local_res = analyze(request.code, "scanner_input.py") 
+            results = [
+                {
+                    "id": item.get("id", "L-000"),
+                    "title": item.get("title", "Local Detection"),
+                    "severity": item.get("severity", "MEDIUM"),
+                    "description": item.get("description", "Vulnerability detected by local pattern matching."),
+                    "fix": item.get("fix", "No fix recommended by local engine."),
+                    "category": item.get("category"),
+                    "cwe": item.get("cwe"),
+                    "original_snippet": None,
+                    "fixed_snippet": None
+                }
+                for item in local_res["issues"]
+            ]
         
         # Log this scan
         log_data = {

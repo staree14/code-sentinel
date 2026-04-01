@@ -84,7 +84,7 @@ export function CodeEditor({ onResult }: Props) {
       const vulnerabilities = data.vulnerabilities.map((v: any) => ({
         ...v,
         id: v.id || Math.random().toString(36).substr(2, 9),
-        severity: v.severity.toLowerCase(), 
+        severity: v.severity.toLowerCase(),
         line: v.line || 1,
         category: v.category || "Security",
         cwe: v.cwe || "CWE-Unknown",
@@ -239,6 +239,14 @@ export function CodeEditor({ onResult }: Props) {
             scrollbar: { verticalScrollbarSize: 4 },
           }}
         />
+
+        {/* Real-time character counter */}
+        <div className="absolute top-4 right-4 z-20 px-3 py-1.5 bg-bg/80 border border-white/5 backdrop-blur-md rounded-sm flex items-center gap-2 pointer-events-none shadow-xl">
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: code.length > 1000 ? "#ff5f56" : "#22c55e" }} />
+          <span className={`text-[10px] font-mono leading-none ${code.length > 1000 ? "text-[#ff5f56] font-bold" : "text-white/40"}`}>
+            {code.length} / 1000 chars
+          </span>
+        </div>
 
         {/* scan-line overlay during analysis */}
         <AnimatePresence>

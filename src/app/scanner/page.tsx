@@ -6,6 +6,10 @@ import { Upload, Code, GitBranch, Terminal, AlertTriangle, ShieldCheck, FileCode
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 
+const MAX_PASTE_CHARS = 1000;
+const MAX_FILE_SIZE_MB = 1;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 interface Vulnerability {
   id: string;
   title: string;
@@ -68,16 +72,33 @@ export default function InteractiveDashboard() {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => setCode(e.target?.result as string);
-      reader.readAsText(file);
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setScanError(`File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
+      return;
     }
+
+    setScanError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (content.length > 50000) { // Catching extremely large text files even if under 2MB
+        setScanError("File content too dense for quick scan. please use a smaller sample.");
+        return;
+      }
+      setCode(content);
+    };
+    reader.readAsText(file);
   };
 
   const handleScan = async () => {
     const payloadCode = activeTab === "repo" ? `Analyze this GitHub Repository URL: ${repoUrl}` : code;
     if (!payloadCode) return setScanError("Please provide some code or a repository URL to scan.");
+
+    if (activeTab === "paste" && code.length > MAX_PASTE_CHARS) {
+      return setScanError(`Pasted code exceeds ${MAX_PASTE_CHARS} character limit.`);
+    }
 
     setLoadingScan(true);
     setScanError(null);
@@ -194,11 +215,21 @@ export default function InteractiveDashboard() {
 
             <div className="min-h-[400px] mb-6">
               {activeTab === "paste" && (
-                <textarea
-                  value={code} onChange={(e) => setCode(e.target.value)}
-                  placeholder="Paste your source code or IAM JSON here..."
-                  className="w-full h-[400px] bg-bg2 border border-pixel-border p-4 font-mono text-sm focus:border-pixel-green resize-none rounded-sm outline-none"
-                />
+                <div className="flex flex-col gap-2">
+                  <textarea
+                    value={code} onChange={(e) => setCode(e.target.value)}
+                    placeholder="Paste your source code or IAM JSON here..."
+                    className={`w-full h-[370px] bg-bg2 border ${code.length > MAX_PASTE_CHARS ? 'border-pixel-red' : 'border-pixel-border'} p-4 font-mono text-sm focus:border-pixel-green resize-none rounded-sm outline-none`}
+                  />
+                  <div className="flex justify-between items-center text-[10px] font-mono">
+                    <span className={code.length > MAX_PASTE_CHARS ? 'text-pixel-red' : 'text-muted'}>
+                      {code.length > MAX_PASTE_CHARS ? '⚠ LIMIT EXCEEDED' : 'READY TO SCAN'}
+                    </span>
+                    <span className={code.length > MAX_PASTE_CHARS ? 'text-pixel-red font-bold' : 'text-muted'}>
+                      {code.length} / {MAX_PASTE_CHARS} chars
+                    </span>
+                  </div>
+                </div>
               )}
               {activeTab === "upload" && (
                 <div className="flex flex-col gap-4">
@@ -208,6 +239,9 @@ export default function InteractiveDashboard() {
                       <label className="px-6 py-2 bg-pixel-border cursor-pointer hover:bg-bg border border-pixel-border text-xs rounded-sm transition-colors">
                         Browse Files <input type="file" className="hidden" onChange={handleFileUpload} />
                       </label>
+                      <p className="mt-4 text-[10px] text-muted font-mono uppercase tracking-widest">
+                        Max file size: {MAX_FILE_SIZE_MB}MB
+                      </p>
                     </div>
                   ) : (
                     <div className="flex flex-col gap-3">
@@ -221,8 +255,16 @@ export default function InteractiveDashboard() {
                       </div>
                       <textarea
                         value={code} onChange={(e) => setCode(e.target.value)}
-                        className="w-full h-[320px] bg-bg2 border border-pixel-border p-4 font-mono text-sm focus:border-pixel-green resize-none rounded-sm outline-none"
+                        className={`w-full h-[320px] bg-bg2 border ${code.length > MAX_PASTE_CHARS ? 'border-pixel-red' : 'border-pixel-border'} p-4 font-mono text-sm focus:border-pixel-green resize-none rounded-sm outline-none`}
                       />
+                      <div className="flex justify-between items-center text-[10px] font-mono">
+                        <span className={code.length > MAX_PASTE_CHARS ? 'text-pixel-red' : 'text-muted'}>
+                          {code.length > MAX_PASTE_CHARS ? '⚠ FILE CONTENT TOO LARGE' : 'FILE PREVIEW'}
+                        </span>
+                        <span className={code.length > MAX_PASTE_CHARS ? 'text-pixel-red font-bold' : 'text-muted'}>
+                          {code.length} / {MAX_PASTE_CHARS} chars
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -244,7 +286,7 @@ export default function InteractiveDashboard() {
             {scanError && <div className="mb-4 p-4 bg-pixel-red/10 border border-pixel-red/40 text-pixel-red text-xs leading-relaxed flex items-center gap-3"><AlertTriangle className="w-4 h-4 shrink-0" /> {scanError}</div>}
 
             <button
-              onClick={handleScan} disabled={loadingScan}
+              onClick={handleScan} disabled={loadingScan || code.length > MAX_PASTE_CHARS}
               className="w-full py-4 bg-pixel-green text-bg font-press-start text-[0.6rem] hover:bg-green-400 disabled:opacity-50 flex items-center justify-center gap-3 transition-colors rounded-sm relative shadow-[0_0_20px_rgba(57,211,83,0.15)]"
             >
               {loadingScan ? <><Loader2 className="w-4 h-4 animate-spin" /> SCANNING...</> : "LAUNCH SECURITY SCAN"}

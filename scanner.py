@@ -2,7 +2,7 @@
 import os
 from dotenv import load_dotenv
 from google import genai  # your Gemini client
-from backend.analyzer import analyze  # local analyzer
+from backend.analyzer import analyze, parse_file  # local analyzer
 
 # Load environment variables from .env
 load_dotenv()
@@ -16,14 +16,15 @@ GEMINI_MODEL = 'gemini-1.5-flash'  # Use a valid model name
 SAMPLES_FOLDER = "backend/test_samples"
 
 def run_analysis(file_path, use_llm=False):
-    if not os.path.exists(file_path):
-        print(f"{file_path} not found. Skipping.")
+    file_data = parse_file(file_path)
+    if not file_data:
+        print(f"{file_path} not found or unreadable. Skipping.")
         return
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    path, content, file_type = file_data
 
     if use_llm:
+        print(f"\n--- [LLM] Analyzing {path} ({file_type}) ---")
         security_prompt = f"""
         You are a security expert. Analyze this code for vulnerabilities.
 
@@ -49,8 +50,8 @@ def run_analysis(file_path, use_llm=False):
             print(f"Error calling Gemini: {str(e)}")
 
     else:
-        result = analyze(content, file_path)
-        print(f"\n--- Local Analysis for {file_path} ---")
+        result = analyze(content, path)
+        print(f"\n--- [LOCAL] Analyzing {path} ({file_type}) ---")
         print(f"Total Issues: {result['total']}")
         print(f"Risk Score: {result['risk_score']}")
         if result['total'] == 0:

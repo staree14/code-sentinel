@@ -65,6 +65,26 @@ async def analyze_code(request: ScanRequest):
         logger.error(f"Error during scan: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/samples")
+async def get_samples():
+    """Returns a list of available test sample filenames."""
+    samples_dir = os.path.join(os.path.dirname(__file__), "test_samples")
+    if not os.path.exists(samples_dir):
+        return {"samples": []}
+    return {"samples": [f for f in os.listdir(samples_dir) if os.path.isfile(os.path.join(samples_dir, f))]}
+
+@app.get("/api/sample/{filename}")
+async def get_sample_content(filename: str):
+    """Returns the content of a specific test sample."""
+    samples_dir = os.path.join(os.path.dirname(__file__), "test_samples")
+    file_path = os.path.join(samples_dir, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Sample not found")
+    
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return {"content": content}
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "CodeSentinel API"}

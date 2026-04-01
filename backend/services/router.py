@@ -138,8 +138,6 @@ def get_route(complexity_score: int, intent: str, token_count: int = 50) -> dict
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
 def _pick_model(score: int, intent: str) -> str:
-    if intent == "Security":
-        return "Claude Haiku"
     if score > 6 or intent in _PRO_INTENTS:
         return "Nova Pro"
     if score < 3 and intent not in _LITE_INTENTS:
@@ -173,13 +171,13 @@ def _build_reason(score: int, intent: str, model_name: str, tokens: int) -> str:
             f"Moderate complexity score ({score}/10) with {tokens} input tokens. "
             "Nova Lite provides a balanced trade-off between capability and cost."
         )
-    if model_name == "Claude Haiku":
-        return (
-            "Security-sensitive input detected. Claude 3 Haiku is routed "
-            "for deep security analysis because it safely handles exploit terminology "
-            "without triggering false-positive AI content filters."
-        )
     # Nova Pro
+    if intent == "Security":
+        return (
+            "Security-sensitive input detected (credentials, policies, or "
+            "vulnerability keywords). Nova Pro is required for thorough "
+            "risk analysis."
+        )
     if intent == "Code":
         return (
             f"Code-heavy input with complexity score {score}/10. "

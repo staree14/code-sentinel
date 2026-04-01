@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Code, GitBranch, Terminal, AlertTriangle, ShieldCheck, FileCode2, Loader2, ArrowLeft, Send, Sparkles, Activity, Wrench, ChevronDown, ChevronUp, Bot, User, CheckCircle } from "lucide-react";
+import { Upload, Code, GitBranch, Terminal, AlertTriangle, ShieldCheck, FileCode2, Loader2, ArrowLeft, Send, Sparkles, Activity, Wrench, ChevronDown, ChevronUp, Bot, User, CheckCircle, Copy, Check } from "lucide-react";
 import Link from "next/link";
 
 interface Vulnerability {
@@ -88,8 +88,9 @@ export default function InteractiveDashboard() {
         body: JSON.stringify({ code: payloadCode }),
       });
 
-      if (!response.ok) throw new Error("Failed to scan code. Make sure the backend is running on port 8000.");
       const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Failed to scan code. Make sure the backend is running on port 8000.");
+
       setResults(data.vulnerabilities);
     } catch (err: any) {
       setScanError(err.message || "An unknown error occurred.");
@@ -120,7 +121,6 @@ export default function InteractiveDashboard() {
         body: JSON.stringify({ prompt: textToSend }),
       });
 
-      if (!response.ok) throw new Error("Failed to query the /process route.");
       const data = await response.json();
 
       setChatHistory(prev => [...prev, { role: "ai", text: data.answer }]);
@@ -140,6 +140,12 @@ export default function InteractiveDashboard() {
 
   const toggleFix = (id: string) => {
     setExpandedFixes(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleCopyFix = (id: string, code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedFixId(id);
+    setTimeout(() => setCopiedFixId(null), 2000);
   };
 
   return (
@@ -348,9 +354,9 @@ export default function InteractiveDashboard() {
                       <h3 className="text-pixel-text text-base inline">{vuln.title}</h3>
                     </div>
                     <span className={`text-[10px] px-2 py-1 border whitespace-nowrap ml-4 flex-shrink-0 ${vuln.severity === 'CRITICAL' ? 'border-pixel-red text-pixel-red bg-pixel-red/10' :
-                        vuln.severity === 'HIGH' ? 'border-aws-orange text-aws-orange bg-aws-orange/10' :
-                          vuln.severity === 'MEDIUM' ? 'border-pixel-yellow text-pixel-yellow bg-pixel-yellow/10' :
-                            'border-pixel-green text-pixel-green bg-pixel-green/10'
+                      vuln.severity === 'HIGH' ? 'border-aws-orange text-aws-orange bg-aws-orange/10' :
+                        vuln.severity === 'MEDIUM' ? 'border-pixel-yellow text-pixel-yellow bg-pixel-yellow/10' :
+                          'border-pixel-green text-pixel-green bg-pixel-green/10'
                       }`}>[{vuln.severity}]</span>
                   </div>
 
@@ -377,7 +383,16 @@ export default function InteractiveDashboard() {
                     {expandedFixes[vuln.id] && (
                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="mt-4 p-4 bg-bg border flex flex-col relative" style={{ borderColor: 'rgba(57,211,83,0.3)' }}>
                         <span className="absolute -top-2 left-4 bg-bg px-2 text-[10px] text-pixel-green font-press-start" style={{ fontSize: '0.45rem' }}>RECOMMENDED_FIX</span>
-                        <code className="whitespace-pre-wrap text-sm text-muted block mt-2 overflow-x-auto">{vuln.fix}</code>
+
+                        <button
+                          onClick={() => handleCopyFix(vuln.id, vuln.fix)}
+                          className="absolute top-2 right-2 p-1.5 bg-bg2 text-muted hover:text-pixel-green hover:bg-pixel-green/10 border border-pixel-border rounded-sm transition-colors flex items-center gap-1 text-[10px] font-mono z-10"
+                        >
+                          {copiedFixId === vuln.id ? <Check className="w-3 h-3 text-pixel-green" /> : <Copy className="w-3 h-3" />}
+                          {copiedFixId === vuln.id ? "COPIED!" : "COPY"}
+                        </button>
+
+                        <code className="whitespace-pre-wrap text-sm text-muted block mt-6 overflow-x-auto">{vuln.fix}</code>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -435,8 +450,8 @@ export default function InteractiveDashboard() {
                     </div>
 
                     <div className={`p-5 text-sm font-mono whitespace-pre-wrap rounded-sm ${chat.role === "user"
-                        ? "bg-bg2 border border-pixel-border text-pixel-text"
-                        : "bg-[#110e19] border border-pixel-purple/30 text-pixel-text shadow-[0_0_15px_rgba(163,113,247,0.05)]"
+                      ? "bg-bg2 border border-pixel-border text-pixel-text"
+                      : "bg-[#110e19] border border-pixel-purple/30 text-pixel-text shadow-[0_0_15px_rgba(163,113,247,0.05)]"
                       }`}>
                       {chat.text}
                     </div>

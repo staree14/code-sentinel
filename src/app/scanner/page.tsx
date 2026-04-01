@@ -36,12 +36,12 @@ export default function InteractiveDashboard() {
   const [loadingScan, setLoadingScan] = useState(false);
   const [results, setResults] = useState<Vulnerability[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
-  
+
   // UI state
   const [expandedFixes, setExpandedFixes] = useState<Record<string, boolean>>({});
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  
+
   // Chat & Process API state
   const [promptInput, setPromptInput] = useState("");
   const [loadingChat, setLoadingChat] = useState(false);
@@ -122,7 +122,7 @@ export default function InteractiveDashboard() {
 
       if (!response.ok) throw new Error("Failed to query the /process route.");
       const data = await response.json();
-      
+
       setChatHistory(prev => [...prev, { role: "ai", text: data.answer }]);
       setLatestAnalytics({
         routing_decision: data.routing_decision,
@@ -144,7 +144,7 @@ export default function InteractiveDashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-bg text-pixel-text font-ibm-plex overflow-hidden pb-[80px]">
-      
+
       {/* ── 1. Independent Navbar ── */}
       <header className="flex items-center justify-between px-6 py-4 bg-bg3 border-b border-pixel-border z-10">
         <div className="flex items-center gap-6">
@@ -156,8 +156,8 @@ export default function InteractiveDashboard() {
             <h1 className="font-press-start text-xs text-pixel-green tracking-widest leading-none mt-1">SECURITY DASHBOARD</h1>
           </div>
         </div>
-        
-        <button 
+
+        <button
           onClick={() => setShowAnalytics(!showAnalytics)}
           className={`flex items-center gap-2 px-4 py-2 border rounded-sm text-xs font-mono transition-colors ${showAnalytics ? 'bg-pixel-blue/10 border-pixel-blue text-pixel-blue shadow-[0_0_15px_rgba(56,139,253,0.3)]' : 'border-pixel-border text-muted hover:text-pixel-text'}`}
         >
@@ -168,7 +168,7 @@ export default function InteractiveDashboard() {
 
       {/* ── 2. Main Workspace ── */}
       <main className="flex-1 flex overflow-hidden">
-        
+
         {/* Left Pane: Scanner Inputs */}
         <div className="w-1/2 p-6 overflow-y-auto border-r border-pixel-border">
           <div className="max-w-2xl mx-auto">
@@ -193,18 +193,36 @@ export default function InteractiveDashboard() {
                 />
               )}
               {activeTab === "upload" && (
-                <div className="w-full h-[400px] border-2 border-dashed border-pixel-border flex flex-col items-center justify-center rounded-sm bg-bg2 hover:bg-bg3 transition-colors">
-                  <FileCode2 className="w-12 h-12 text-muted mb-4" />
-                  <label className="px-6 py-2 bg-pixel-border cursor-pointer hover:bg-bg border border-pixel-border text-xs rounded-sm transition-colors">
-                    Browse Files <input type="file" className="hidden" onChange={handleFileUpload} />
-                  </label>
-                  {code && <p className="mt-4 text-pixel-green text-xs flex items-center gap-2"><CheckCircle className="w-4 h-4"/> File loaded ({code.length} characters)</p>}
+                <div className="flex flex-col gap-4">
+                  {!code ? (
+                    <div className="w-full h-[400px] border-2 border-dashed border-pixel-border flex flex-col items-center justify-center rounded-sm bg-bg2 hover:bg-bg3 transition-colors">
+                      <FileCode2 className="w-12 h-12 text-muted mb-4" />
+                      <label className="px-6 py-2 bg-pixel-border cursor-pointer hover:bg-bg border border-pixel-border text-xs rounded-sm transition-colors">
+                        Browse Files <input type="file" className="hidden" onChange={handleFileUpload} />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex justify-between items-center px-4 py-2 bg-bg2 border border-pixel-border rounded-sm">
+                        <p className="text-pixel-green text-xs flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" /> File loaded ({code.length} characters)
+                        </p>
+                        <label className="text-[10px] text-muted hover:text-pixel-text cursor-pointer underline">
+                          Change File <input type="file" className="hidden" onChange={handleFileUpload} />
+                        </label>
+                      </div>
+                      <textarea
+                        value={code} onChange={(e) => setCode(e.target.value)}
+                        className="w-full h-[320px] bg-bg2 border border-pixel-border p-4 font-mono text-sm focus:border-pixel-green resize-none rounded-sm outline-none"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
               {activeTab === "repo" && (
                 <div className="w-full h-[400px] flex flex-col justify-center bg-bg2 p-8 border border-pixel-border">
                   <label className="text-sm text-pixel-blue mb-2 font-mono flex items-center gap-2">
-                    <Terminal className="w-4 h-4"/> Target Repository URL
+                    <Terminal className="w-4 h-4" /> Target Repository URL
                   </label>
                   <input
                     type="text" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)}
@@ -215,7 +233,7 @@ export default function InteractiveDashboard() {
               )}
             </div>
 
-            {scanError && <div className="mb-4 p-4 bg-pixel-red/10 border border-pixel-red/40 text-pixel-red text-xs leading-relaxed flex items-center gap-3"><AlertTriangle className="w-4 h-4 shrink-0"/> {scanError}</div>}
+            {scanError && <div className="mb-4 p-4 bg-pixel-red/10 border border-pixel-red/40 text-pixel-red text-xs leading-relaxed flex items-center gap-3"><AlertTriangle className="w-4 h-4 shrink-0" /> {scanError}</div>}
 
             <button
               onClick={handleScan} disabled={loadingScan}
@@ -228,11 +246,11 @@ export default function InteractiveDashboard() {
 
         {/* Right Pane: Results & Optional Analytics */}
         <div className="w-1/2 flex flex-col overflow-hidden bg-bg relative">
-          
+
           {/* Analytics Header Panel (Slides in) */}
           <AnimatePresence>
             {showAnalytics && latestAnalytics && (
-              <motion.div 
+              <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -244,7 +262,7 @@ export default function InteractiveDashboard() {
                   </div>
                   {latestAnalytics.security_scan.pii_detected && (
                     <span className="text-[10px] px-2 py-0.5 bg-pixel-red/20 text-pixel-red border border-pixel-red/40 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3"/> PII DETECTED IN PROMPT
+                      <AlertTriangle className="w-3 h-3" /> PII DETECTED IN PROMPT
                     </span>
                   )}
                 </div>
@@ -303,7 +321,7 @@ export default function InteractiveDashboard() {
             {!results && !loadingScan && (
               <div className="h-full flex flex-col items-center justify-center text-muted opacity-50">
                 <ShieldCheck className="w-16 h-16 mb-4" />
-                <p className="font-mono text-sm text-center">Awaiting target parameters.<br/>Initiate scan to begin inspection.</p>
+                <p className="font-mono text-sm text-center">Awaiting target parameters.<br />Initiate scan to begin inspection.</p>
               </div>
             )}
 
@@ -329,14 +347,13 @@ export default function InteractiveDashboard() {
                       <span className="text-pixel-blue text-xs mr-2">{vuln.id}</span>
                       <h3 className="text-pixel-text text-base inline">{vuln.title}</h3>
                     </div>
-                    <span className={`text-[10px] px-2 py-1 border whitespace-nowrap ml-4 flex-shrink-0 ${
-                      vuln.severity === 'CRITICAL' ? 'border-pixel-red text-pixel-red bg-pixel-red/10' :
-                      vuln.severity === 'HIGH' ? 'border-aws-orange text-aws-orange bg-aws-orange/10' :
-                      vuln.severity === 'MEDIUM' ? 'border-pixel-yellow text-pixel-yellow bg-pixel-yellow/10' :
-                      'border-pixel-green text-pixel-green bg-pixel-green/10'
-                    }`}>[{vuln.severity}]</span>
+                    <span className={`text-[10px] px-2 py-1 border whitespace-nowrap ml-4 flex-shrink-0 ${vuln.severity === 'CRITICAL' ? 'border-pixel-red text-pixel-red bg-pixel-red/10' :
+                        vuln.severity === 'HIGH' ? 'border-aws-orange text-aws-orange bg-aws-orange/10' :
+                          vuln.severity === 'MEDIUM' ? 'border-pixel-yellow text-pixel-yellow bg-pixel-yellow/10' :
+                            'border-pixel-green text-pixel-green bg-pixel-green/10'
+                      }`}>[{vuln.severity}]</span>
                   </div>
-                  
+
                   <div className="flex gap-4 mb-4 text-xs text-muted border-b border-pixel-border/50 pb-3">
                     {vuln.category && <span><span className="text-pixel-border">CAT:</span> {vuln.category}</span>}
                     {vuln.cwe && <span><span className="text-pixel-border">CWE:</span> {vuln.cwe}</span>}
@@ -344,7 +361,7 @@ export default function InteractiveDashboard() {
                   </div>
 
                   <p className="text-sm text-pixel-text mb-6 border-l-2 border-pixel-border pl-3 leading-relaxed">{vuln.description}</p>
-                  
+
                   {/* Actions */}
                   <div className="flex gap-2">
                     <button onClick={() => toggleFix(vuln.id)} className="flex items-center gap-2 text-xs bg-bg border border-pixel-border px-3 py-1.5 hover:bg-bg3 hover:text-pixel-green transition-colors">
@@ -374,9 +391,9 @@ export default function InteractiveDashboard() {
       {/* ── 3. Full Screen Expandable Chat Overlay ── */}
       <AnimatePresence>
         {isChatOpen && (
-          <motion.div 
-            initial={{ y: "100%", opacity: 0.5 }} 
-            animate={{ y: 0, opacity: 1 }} 
+          <motion.div
+            initial={{ y: "100%", opacity: 0.5 }}
+            animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0.5 }}
             transition={{ type: "spring", bounce: 0, duration: 0.4 }}
             className="fixed inset-0 z-40 flex flex-col bg-bg/95 backdrop-blur-lg border-t border-pixel-border shadow-[0_-20px_80px_rgba(0,0,0,0.8)] pt-[80px] pb-[80px]"
@@ -387,17 +404,17 @@ export default function InteractiveDashboard() {
             {/* Chat Overlay Header */}
             <div className="flex justify-between items-center px-8 py-4 border-b border-pixel-border bg-bg/80 absolute top-0 inset-x-0 z-50">
               <h3 className="font-press-start text-[0.6rem] text-pixel-purple flex items-center gap-3">
-                <Sparkles className="w-5 h-5"/> AI SECURITY ASSISTANT
+                <Sparkles className="w-5 h-5" /> AI SECURITY ASSISTANT
               </h3>
-              <button 
-                onClick={() => setIsChatOpen(false)} 
+              <button
+                onClick={() => setIsChatOpen(false)}
                 className="text-muted hover:text-pixel-text bg-bg2 px-4 py-2 border border-pixel-border flex items-center gap-2 text-xs font-mono transition-colors"
                 title="Collapse Chat"
               >
-                COLLAPSE <ChevronDown className="w-4 h-4"/>
+                COLLAPSE <ChevronDown className="w-4 h-4" />
               </button>
             </div>
-            
+
             {/* Chat History Flow */}
             <div className="flex-1 overflow-y-auto px-8 py-8 space-y-8 max-w-5xl mx-auto w-full">
               {chatHistory.length === 0 && (
@@ -411,18 +428,16 @@ export default function InteractiveDashboard() {
               {chatHistory.map((chat, i) => (
                 <div key={i} className={`flex ${chat.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`flex gap-4 max-w-[85%] ${chat.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                    
-                    <div className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-xs border ${
-                      chat.role === "user" ? "bg-bg2 border-pixel-border text-muted" : "bg-pixel-purple/10 border-pixel-purple text-pixel-purple"
-                    }`}>
-                      {chat.role === "user" ? <User className="w-4 h-4"/> : <Sparkles className="w-4 h-4"/>}
+
+                    <div className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-xs border ${chat.role === "user" ? "bg-bg2 border-pixel-border text-muted" : "bg-pixel-purple/10 border-pixel-purple text-pixel-purple"
+                      }`}>
+                      {chat.role === "user" ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
                     </div>
 
-                    <div className={`p-5 text-sm font-mono whitespace-pre-wrap rounded-sm ${
-                      chat.role === "user" 
-                        ? "bg-bg2 border border-pixel-border text-pixel-text" 
+                    <div className={`p-5 text-sm font-mono whitespace-pre-wrap rounded-sm ${chat.role === "user"
+                        ? "bg-bg2 border border-pixel-border text-pixel-text"
                         : "bg-[#110e19] border border-pixel-purple/30 text-pixel-text shadow-[0_0_15px_rgba(163,113,247,0.05)]"
-                    }`}>
+                      }`}>
                       {chat.text}
                     </div>
 
@@ -434,10 +449,10 @@ export default function InteractiveDashboard() {
                 <div className="flex justify-start">
                   <div className="flex gap-4 max-w-[85%]">
                     <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-pixel-purple/10 border border-pixel-purple text-pixel-purple">
-                      <Loader2 className="w-4 h-4 animate-spin"/>
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     </div>
                     <div className="p-5 text-sm font-mono bg-[#110e19] border border-pixel-purple/30 text-pixel-purple/80 flex items-center gap-2">
-                       Processing analysis via Amazon Bedrock routing matrix...
+                      Processing analysis via Amazon Bedrock routing matrix...
                     </div>
                   </div>
                 </div>
@@ -465,11 +480,11 @@ export default function InteractiveDashboard() {
           {/* Action buttons inside input */}
           <div className="absolute right-2 flex items-center gap-2">
             {!isChatOpen && (
-               <button onClick={() => setIsChatOpen(true)} className="p-2 text-muted hover:text-pixel-text transition-colors" title="Expand Chat">
-                 <ChevronUp className="w-4 h-4" />
-               </button>
+              <button onClick={() => setIsChatOpen(true)} className="p-2 text-muted hover:text-pixel-text transition-colors" title="Expand Chat">
+                <ChevronUp className="w-4 h-4" />
+              </button>
             )}
-            <button 
+            <button
               onClick={() => handleSendPrompt()}
               disabled={loadingChat || !promptInput.trim()}
               className="px-4 py-2 bg-pixel-purple text-bg hover:bg-purple-400 disabled:opacity-50 disabled:bg-pixel-border disabled:text-muted transition-colors rounded-sm shadow-[0_0_10px_rgba(163,113,247,0.3)]"

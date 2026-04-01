@@ -82,8 +82,10 @@ def scan_code(code_text: str) -> list:
             return vulns
         except json.JSONDecodeError as de:
             return [{
-                "vulnerability": "Error parsing JSON from Bedrock LLM",
+                "id": "SCAN_ERR",
+                "title": "Error parsing JSON from Bedrock LLM",
                 "severity": "CRITICAL",
+                "description": "The AI provided a response that couldn't be parsed as a structured report.",
                 "fix": f"Raw Output: {output_text}"
             }]
             

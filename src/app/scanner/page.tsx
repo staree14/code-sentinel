@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Code, GitBranch, Terminal, AlertTriangle, ShieldCheck, FileCode2, Loader2, ArrowLeft, Send, Sparkles, Activity, Wrench, ChevronDown, ChevronUp, Bot, User, CheckCircle, Copy, Check } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 const MAX_PASTE_CHARS = 1000;
 const MAX_FILE_SIZE_MB = 1;
@@ -55,6 +58,76 @@ export default function InteractiveDashboard() {
   const [loadingChat, setLoadingChat] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [latestAnalytics, setLatestAnalytics] = useState<AnalyticsData | null>(null);
+  const [fixedVulnIds, setFixedVulnIds] = useState<string[]>([]);
+
+  // Monaco Ref & Decorations
+  const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+  const decorationsRef = useRef<string[]>([]);
+
+  // Sync Decorations with Snippet Search
+  const updateDecorations = () => {
+    if (!editorRef.current || !monacoRef.current || !results) {
+      if (editorRef.current && monacoRef.current) {
+        decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
+      }
+      return;
+    }
+
+    const newDecorations: any[] = [];
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    results.forEach(vuln => {
+      const isFixed = fixedVulnIds.includes(vuln.id);
+      const targetSnippet = isFixed ? vuln.fixed_snippet : vuln.original_snippet;
+
+      if (!targetSnippet) return;
+
+      // Find the snippet in the current editor content
+      const matches = model.findMatches(targetSnippet, false, false, true, null, true);
+
+      matches.forEach((match: any) => {
+        newDecorations.push({
+          range: match.range,
+          options: {
+            isWholeLine: true,
+            className: isFixed ? 'fixed-line-highlight' : 'vulnerable-line-highlight',
+            glyphMarginClassName: isFixed ? 'fixed-glyph' : 'vulnerable-glyph',
+            hoverMessage: { value: isFixed ? `**[FIXED]** ${vuln.title}` : `**[${vuln.severity}]** ${vuln.title}` }
+          }
+        });
+      });
+    });
+
+    decorationsRef.current = editorRef.current.deltaDecorations(
+      decorationsRef.current,
+      newDecorations
+    );
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => updateDecorations(), 50);
+    return () => clearTimeout(timer);
+  }, [results, fixedVulnIds, code]);
+
+  const handleEditorMount = (editor: any, monaco: any) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    monaco.editor.defineTheme('codesentinel-v2', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#0a0a0b',
+        'editorGutter.background': '#0a0a0b',
+        'editor.lineHighlightBackground': '#18181b',
+      }
+    });
+    monaco.editor.setTheme('codesentinel-v2');
+    updateDecorations();
+  };
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -85,7 +158,7 @@ export default function InteractiveDashboard() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
-      if (content.length > 50000) { // Catching extremely large text files even if under 2MB
+      if (content.length > 50000) {
         setScanError("File content too dense for quick scan. please use a smaller sample.");
         return;
       }
@@ -105,6 +178,7 @@ export default function InteractiveDashboard() {
     setLoadingScan(true);
     setScanError(null);
     setResults(null);
+    setFixedVulnIds([]);
 
     try {
       const response = await fetch("http://localhost:8000/api/scan", {
@@ -114,7 +188,7 @@ export default function InteractiveDashboard() {
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "Failed to scan code. Make sure the backend is running on port 8000.");
+      if (!response.ok) throw new Error(data.detail || "Failed to scan code.");
 
       setResults(data.vulnerabilities);
     } catch (err: any) {
@@ -173,19 +247,25 @@ export default function InteractiveDashboard() {
     setTimeout(() => setCopiedFixId(null), 2000);
   };
 
-  const handleApplyFix = (original: string, fixed: string) => {
+  const handleApplyFix = (original: string, fixed: string, vulnId?: string) => {
     if (!original || !fixed) return;
 
     setCode(prevCode => {
-      // 1. Exact match
-      let newCode = prevCode.replace(original, fixed);
-      if (newCode !== prevCode) return newCode;
+      const newCode = prevCode.replace(original, fixed);
+      if (newCode !== prevCode) {
+        if (vulnId) setFixedVulnIds(prev => [...prev, vulnId]);
+        return newCode;
+      }
 
-      // 2. Trimmed match (handles AI padding)
-      newCode = prevCode.replace(original.trim(), fixed.trim());
-      if (newCode !== prevCode) return newCode;
+      // Try normalized if exact fails
+      const nOriginal = original.trim();
+      const nNewCode = prevCode.replace(nOriginal, fixed.trim());
+      if (nNewCode !== prevCode) {
+        if (vulnId) setFixedVulnIds(prev => [...prev, vulnId]);
+        return nNewCode;
+      }
 
-      setScanError("Matching error: The AI's suggested snippet didn't exactly match your editor content. Try clicking 'Explain' for guidance.");
+      setScanError("Note: Automatic fix failed due to a code mismatch.");
       return prevCode;
     });
   };
@@ -235,12 +315,24 @@ export default function InteractiveDashboard() {
             <div className="min-h-[400px] mb-6">
               {activeTab === "paste" && (
                 <div className="flex flex-col gap-2">
-                  <textarea
-                    value={code} onChange={(e) => setCode(e.target.value)}
-                    placeholder="Paste your source code or IAM JSON here..."
-                    className={`w-full h-[370px] bg-bg2 border ${code.length > MAX_PASTE_CHARS ? 'border-pixel-red' : 'border-pixel-border'} p-4 font-mono text-sm focus:border-pixel-green resize-none rounded-sm outline-none`}
-                  />
-                  <div className="flex justify-between items-center text-[10px] font-mono">
+                  <div className="w-full h-[400px] bg-bg2 border border-pixel-border overflow-hidden">
+                    <Editor
+                      height="100%"
+                      defaultLanguage="python"
+                      value={code}
+                      onMount={handleEditorMount}
+                      onChange={(v) => setCode(v || "")}
+                      options={{
+                        fontSize: 13,
+                        fontFamily: "'IBM Plex Mono', monospace",
+                        minimap: { enabled: false },
+                        glyphMargin: true,
+                        padding: { top: 16 },
+                        scrollbar: { vertical: 'hidden' }
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] font-mono mt-1">
                     <span className={code.length > MAX_PASTE_CHARS ? 'text-pixel-red' : 'text-muted'}>
                       {code.length > MAX_PASTE_CHARS ? '⚠ LIMIT EXCEEDED' : 'READY TO SCAN'}
                     </span>
@@ -272,11 +364,23 @@ export default function InteractiveDashboard() {
                           Change File <input type="file" className="hidden" onChange={handleFileUpload} />
                         </label>
                       </div>
-                      <textarea
-                        value={code} onChange={(e) => setCode(e.target.value)}
-                        className={`w-full h-[320px] bg-bg2 border ${code.length > MAX_PASTE_CHARS ? 'border-pixel-red' : 'border-pixel-border'} p-4 font-mono text-sm focus:border-pixel-green resize-none rounded-sm outline-none`}
-                      />
-                      <div className="flex justify-between items-center text-[10px] font-mono">
+                      <div className="w-full h-[320px] bg-bg2 border border-pixel-border overflow-hidden">
+                        <Editor
+                          height="100%"
+                          defaultLanguage="python"
+                          value={code}
+                          onMount={handleEditorMount}
+                          onChange={(v) => setCode(v || "")}
+                          options={{
+                            fontSize: 13,
+                            fontFamily: "'IBM Plex Mono', monospace",
+                            minimap: { enabled: false },
+                            glyphMargin: true,
+                            padding: { top: 16 }
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] font-mono mt-1">
                         <span className={code.length > MAX_PASTE_CHARS ? 'text-pixel-red' : 'text-muted'}>
                           {code.length > MAX_PASTE_CHARS ? '⚠ FILE CONTENT TOO LARGE' : 'FILE PREVIEW'}
                         </span>
@@ -316,7 +420,7 @@ export default function InteractiveDashboard() {
         {/* Right Pane: Results & Optional Analytics */}
         <div className="w-1/2 flex flex-col overflow-hidden bg-bg relative">
 
-          {/* Analytics Header Panel (Slides in) */}
+          {/* Analytics Header Panel */}
           <AnimatePresence>
             {showAnalytics && latestAnalytics && (
               <motion.div
@@ -329,55 +433,25 @@ export default function InteractiveDashboard() {
                   <div className="flex items-center gap-2 text-pixel-blue">
                     <Activity className="w-4 h-4" /> <span className="font-press-start text-[0.55rem]">PERFORMANCE ANALYTICS</span>
                   </div>
-                  {latestAnalytics.security_scan?.pii_detected && (
-                    <span className="text-[10px] px-2 py-0.5 bg-pixel-red/20 text-pixel-red border border-pixel-red/40 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> PII DETECTED IN PROMPT
-                    </span>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono">
-                  {/* BOX 1 */}
                   <div className="border border-pixel-border bg-bg p-4 flex flex-col justify-between hover:border-pixel-green/30 transition-colors">
                     <div>
                       <p className="text-muted text-[10px] mb-2">ROUTING DECISION</p>
                       <p className="text-pixel-green text-xl font-bold mb-1">{latestAnalytics.routing_decision?.model_used}</p>
-                      <p className="text-xs text-pixel-text mb-2 border-l-2 border-pixel-green pl-2">{latestAnalytics.routing_decision?.intent_detected}</p>
                     </div>
-                    <p className="text-[10px] text-muted leading-tight">{latestAnalytics.routing_decision?.reason}</p>
                   </div>
-
-                  {/* BOX 2 */}
                   <div className="border border-pixel-border bg-bg p-4 flex flex-col justify-between hover:border-pixel-blue/30 transition-colors">
                     <div>
-                      <p className="text-muted text-[10px] mb-2">PERFORMANCE METRICS</p>
-                      <div className="flex justify-between items-end mb-2 border-b border-pixel-border/50 pb-2">
-                        <span className="text-[10px] text-muted">LATENCY</span>
-                        <span className="text-pixel-blue text-lg">{latestAnalytics.performance_metrics?.latency_sec}s</span>
-                      </div>
-                      <div className="flex justify-between items-end mb-2">
-                        <span className="text-[10px] text-muted">TOKENS</span>
-                        <span className="text-pixel-text text-sm">{latestAnalytics.performance_metrics?.tokens_processed}</span>
-                      </div>
+                      <p className="text-muted text-[10px] mb-2">LATENCY</p>
+                      <span className="text-pixel-blue text-lg">{latestAnalytics.performance_metrics?.latency_sec}s</span>
                     </div>
-                    <p className="text-[10px] text-pixel-blue bg-pixel-blue/10 px-2 py-1 inline-block w-fit mt-2 border border-pixel-blue/20">
-                      {latestAnalytics.performance_metrics?.speed_improvement_vs_pro}
-                    </p>
                   </div>
-
-                  {/* BOX 3 */}
-                  <div className="border border-pixel-border bg-bg p-4 flex flex-col justify-between relative overflow-hidden group hover:border-pixel-green/30 transition-colors">
-                    <div className="absolute -right-6 -top-6 w-24 h-24 bg-pixel-green/5 rounded-full pointer-events-none group-hover:bg-pixel-green/10 transition-colors" />
+                  <div className="border border-pixel-border bg-bg p-4 flex flex-col justify-between hover:border-pixel-green/30 transition-colors">
                     <div>
-                      <p className="text-muted text-[10px] mb-2 z-10 relative">BUSINESS IMPACT</p>
-                      <div className="relative z-10">
-                        <p className="text-pixel-green text-3xl font-black mb-1 drop-shadow-[0_0_10px_rgba(57,211,83,0.3)]">{latestAnalytics.business_impact?.cost_reduction_percentage}</p>
-                        <p className="text-xs text-pixel-text mb-4 border-l-2 border-pixel-green pl-2">Cost Reduction</p>
-                      </div>
-                      <div className="flex justify-between items-end mb-2 relative z-10 border-t border-pixel-border/50 pt-2">
-                        <span className="text-[10px] text-muted">SAVED / REQ</span>
-                        <span className="text-aws-orange text-sm font-bold">${latestAnalytics.business_impact?.dollars_saved}</span>
-                      </div>
+                      <p className="text-muted text-[10px] mb-2">BUSINESS IMPACT</p>
+                      <p className="text-pixel-green text-3xl font-black">{latestAnalytics.business_impact?.cost_reduction_percentage}</p>
                     </div>
                   </div>
                 </div>
@@ -395,16 +469,15 @@ export default function InteractiveDashboard() {
             )}
 
             {results?.length === 0 && (
-              <div className="p-6 border border-pixel-green/40 bg-pixel-green/5 text-pixel-green text-center flex flex-col items-center gap-3">
-                <ShieldCheck className="w-12 h-12" />
+              <div className="p-6 border border-pixel-green/40 bg-pixel-green/5 text-pixel-green text-center">
+                <ShieldCheck className="w-12 h-12 mx-auto mb-3" />
                 <span className="font-press-start text-[0.6rem]">CODE SECURE</span>
-                <span className="font-mono text-sm max-w-sm">No vulnerabilities detected matching the current RAG architecture ruleset.</span>
               </div>
             )}
 
             {results && results.length > 0 && (
-              <div className="font-press-start text-[0.55rem] text-pixel-text mb-6 pb-2 border-b border-pixel-border flex items-center justify-between">
-                <span>DETECTED THREATS ({results.length})</span>
+              <div className="font-press-start text-[0.55rem] text-pixel-text mb-6 pb-2 border-b border-pixel-border">
+                DETECTED THREATS ({results.length})
               </div>
             )}
 
@@ -424,14 +497,11 @@ export default function InteractiveDashboard() {
                   </div>
 
                   <div className="flex gap-4 mb-4 text-xs text-muted border-b border-pixel-border/50 pb-3">
-                    {vuln.category && <span><span className="text-pixel-border">CAT:</span> {vuln.category}</span>}
-                    {vuln.cwe && <span><span className="text-pixel-border">CWE:</span> {vuln.cwe}</span>}
                     {vuln.line && <span className="bg-bg3 px-1.5"><span className="text-pixel-border">L:</span>{vuln.line}</span>}
                   </div>
 
                   <p className="text-sm text-pixel-text mb-6 border-l-2 border-pixel-border pl-3 leading-relaxed">{vuln.description}</p>
 
-                  {/* Actions */}
                   <div className="flex gap-2">
                     <button onClick={() => toggleFix(vuln.id)} className="flex items-center gap-2 text-xs bg-bg border border-pixel-border px-3 py-1.5 hover:bg-bg3 hover:text-pixel-green transition-colors">
                       <Wrench className="w-3 h-3" /> {expandedFixes[vuln.id] ? 'HIDE FIX' : 'SHOW FIX'}
@@ -441,7 +511,7 @@ export default function InteractiveDashboard() {
                     </button>
                     {vuln.fixed_snippet && vuln.original_snippet && (
                       <button
-                        onClick={() => handleApplyFix(vuln.original_snippet!, vuln.fixed_snippet!)}
+                        onClick={() => handleApplyFix(vuln.original_snippet!, vuln.fixed_snippet!, vuln.id)}
                         className="flex items-center gap-2 text-xs bg-pixel-green/20 text-pixel-green border border-pixel-green/40 px-3 py-1.5 hover:bg-pixel-green hover:text-bg transition-colors font-bold"
                       >
                         <Check className="w-3 h-3" /> APPLY FIX
@@ -449,15 +519,14 @@ export default function InteractiveDashboard() {
                     )}
                   </div>
 
-                  {/* Fix Area */}
                   <AnimatePresence>
                     {expandedFixes[vuln.id] && (
                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="mt-4 p-4 bg-bg border flex flex-col relative" style={{ borderColor: 'rgba(57,211,83,0.3)' }}>
-                        <span className="absolute -top-2 left-4 bg-bg px-2 text-[10px] text-pixel-green font-press-start" style={{ fontSize: '0.45rem' }}>RECOMMENDED_FIX</span>
+                        <span className="absolute -top-2 left-4 bg-bg px-2 text-[10px] text-pixel-green font-press-start font-bold">RECOMMENDED_FIX</span>
 
                         <button
                           onClick={() => handleCopyFix(vuln.id, vuln.fix)}
-                          className="absolute top-2 right-2 p-1.5 bg-bg2 text-muted hover:text-pixel-green hover:bg-pixel-green/10 border border-pixel-border rounded-sm transition-colors flex items-center gap-1 text-[10px] font-mono z-10"
+                          className="absolute top-2 right-2 p-1.5 bg-bg2 text-muted hover:text-pixel-green border border-pixel-border rounded-sm transition-colors flex items-center gap-1 text-[10px] font-mono z-10"
                         >
                           {copiedFixId === vuln.id ? <Check className="w-3 h-3 text-pixel-green" /> : <Copy className="w-3 h-3" />}
                           {copiedFixId === vuln.id ? "COPIED!" : "COPY"}
@@ -474,7 +543,7 @@ export default function InteractiveDashboard() {
         </div>
       </main>
 
-      {/* ── 3. Full Screen Expandable Chat Overlay ── */}
+      {/* Chat Overlay */}
       <AnimatePresence>
         {isChatOpen && (
           <motion.div
@@ -484,10 +553,6 @@ export default function InteractiveDashboard() {
             transition={{ type: "spring", bounce: 0, duration: 0.4 }}
             className="fixed inset-0 z-40 flex flex-col bg-bg/95 backdrop-blur-lg border-t border-pixel-border shadow-[0_-20px_80px_rgba(0,0,0,0.8)] pt-[80px] pb-[80px]"
           >
-            {/* Darker background tint layer */}
-            <div className="absolute inset-0 bg-black/40 -z-10" />
-
-            {/* Chat Overlay Header */}
             <div className="flex justify-between items-center px-8 py-4 border-b border-pixel-border bg-bg/80 absolute top-0 inset-x-0 z-50">
               <h3 className="font-press-start text-[0.6rem] text-pixel-purple flex items-center gap-3">
                 <Sparkles className="w-5 h-5" /> AI SECURITY ASSISTANT
@@ -495,135 +560,57 @@ export default function InteractiveDashboard() {
               <button
                 onClick={() => setIsChatOpen(false)}
                 className="text-muted hover:text-pixel-text bg-bg2 px-4 py-2 border border-pixel-border flex items-center gap-2 text-xs font-mono transition-colors"
-                title="Collapse Chat"
               >
                 COLLAPSE <ChevronDown className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Chat History Flow */}
             <div className="flex-1 overflow-y-auto px-8 py-8 space-y-8 max-w-5xl mx-auto w-full">
-              {chatHistory.length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center text-muted opacity-50 font-mono">
-                  <Bot className="w-16 h-16 mb-4" />
-                  <p>Cyber-defense analysis unit ready.</p>
-                  <p className="text-xs mt-2">Enter a prompt below or click "EXPLAIN THIS" on a vulnerability.</p>
-                </div>
-              )}
-
               {chatHistory.map((chat, i) => (
                 <div key={i} className={`flex ${chat.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`flex gap-4 max-w-[85%] ${chat.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-
-                    <div className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-xs border ${chat.role === "user" ? "bg-bg2 border-pixel-border text-muted" : "bg-pixel-purple/10 border-pixel-purple text-pixel-purple"
-                      }`}>
-                      {chat.role === "user" ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
-                    </div>
-
-                    <div className={`p-5 text-sm font-mono whitespace-pre-wrap rounded-sm overflow-hidden ${chat.role === "user"
-                      ? "bg-bg2 border border-pixel-border text-pixel-text"
-                      : "bg-[#110e19] border border-pixel-purple/30 text-pixel-text shadow-[0_0_15px_rgba(163,113,247,0.05)]"
-                      }`}>
-                      {chat.role === "user" ? (
-                        chat.text
-                      ) : (
-                        <div className="prose-invert prose-p:leading-relaxed prose-pre:m-0 prose-pre:bg-transparent">
-                          <ReactMarkdown
-                            components={{
-                              code({ node, inline, className, children, ...props }: any) {
-                                const match = /language-(\w+)/.exec(className || '');
-                                return !inline ? (
-                                  <div className="border border-pixel-purple/40 rounded-sm my-6 overflow-hidden bg-bg shadow-lg">
-                                    <div className="bg-pixel-purple/10 px-4 py-2 border-b border-pixel-purple/40 text-[10px] text-pixel-purple font-mono uppercase font-bold flex items-center gap-2">
-                                      <Code className="w-3 h-3" />
-                                      {match?.[1] || 'snippet'}
-                                    </div>
-                                    <pre className="p-4 overflow-x-auto text-[13px] text-pixel-text/90 leading-relaxed">
-                                      <code className={className} {...props}>
-                                        {children}
-                                      </code>
-                                    </pre>
-                                  </div>
-                                ) : (
-                                  <code className="bg-pixel-purple/10 border border-pixel-purple/20 px-1.5 py-0.5 mt-0.5 inline-block rounded-sm text-pixel-purple text-xs" {...props}>
-                                    {children}
-                                  </code>
-                                );
-                              },
-                              p({ children }) {
-                                return <p className="mb-4 last:mb-0 leading-relaxed text-pixel-text/90">{children}</p>;
-                              },
-                              ul({ children }) {
-                                return <ul className="list-disc pl-6 mb-4 space-y-2 text-pixel-text/90">{children}</ul>;
-                              },
-                              ol({ children }) {
-                                return <ol className="list-decimal pl-6 mb-4 space-y-2 text-pixel-text/90">{children}</ol>;
-                              },
-                              h1({ children }) { return <h1 className="text-pixel-purple text-lg font-bold mb-4 mt-6">{children}</h1>; },
-                              h2({ children }) { return <h2 className="text-pixel-purple text-base font-bold mb-3 mt-5">{children}</h2>; },
-                              h3({ children }) { return <h3 className="text-pixel-purple text-sm font-bold mb-2 mt-4">{children}</h3>; }
-                            }}
-                          >
-                            {chat.text}
-                          </ReactMarkdown>
-                        </div>
-                      )}
-                    </div>
-
+                  <div className={`p-5 text-sm font-mono whitespace-pre-wrap rounded-sm border ${chat.role === "user" ? "bg-bg2 border-pixel-border" : "bg-[#110e19] border-pixel-purple/30 text-pixel-text"}`}>
+                    {chat.role === "ai" ? (
+                      <div className="prose prose-invert prose-p:leading-relaxed">
+                        <ReactMarkdown>{chat.text}</ReactMarkdown>
+                      </div>
+                    ) : chat.text}
                   </div>
                 </div>
               ))}
+            </div>
 
-              {loadingChat && (
-                <div className="flex justify-start">
-                  <div className="flex gap-4 max-w-[85%]">
-                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-pixel-purple/10 border border-pixel-purple text-pixel-purple">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    </div>
-                    <div className="p-5 text-sm font-mono bg-[#110e19] border border-pixel-purple/30 text-pixel-purple/80 flex items-center gap-2">
-                      Processing analysis via Amazon Bedrock routing matrix...
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
+            <div className="p-6 bg-bg border-t border-pixel-border fixed bottom-0 inset-x-0 flex gap-4 items-center">
+              <input
+                type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendPrompt()}
+                placeholder="Ask about security best practices..."
+                className="flex-1 bg-bg2 border border-pixel-border p-4 font-mono text-sm outline-none focus:border-pixel-purple transition-all rounded-sm"
+              />
+              <button
+                onClick={handleSendPrompt} disabled={loadingChat}
+                className="p-4 bg-pixel-purple text-white hover:bg-purple-600 transition-colors rounded-sm shadow-[0_0_20px_rgba(163,113,247,0.2)]"
+              >
+                <Send className="w-5 h-5" />
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── 4. Sticky Bottom Prompt Input Bar (Always Visible) ── */}
-      <div className="fixed bottom-0 left-0 w-full bg-bg3/90 backdrop-blur-md border-t border-pixel-border p-4 z-50">
-        <div className="max-w-5xl mx-auto relative flex items-center shadow-lg">
-          <Sparkles className={`absolute left-4 w-5 h-5 transition-colors ${loadingChat ? 'text-muted' : 'text-pixel-purple'}`} />
-          <input
-            type="text"
-            value={promptInput}
-            onChange={(e) => setPromptInput(e.target.value)}
-            onFocus={() => setIsChatOpen(true)}
-            onKeyDown={(e) => e.key === "Enter" && handleSendPrompt()}
-            placeholder="Ask the AI routing agent to explain a vulnerability or rewrite code..."
-            className="w-full bg-bg border border-pixel-border py-4 pl-12 pr-20 font-mono text-sm focus:outline-none focus:border-pixel-purple focus:ring-1 focus:ring-pixel-purple/50 transition-all rounded-sm text-pixel-text placeholder:text-muted/60"
-            disabled={loadingChat}
-          />
-          {/* Action buttons inside input */}
-          <div className="absolute right-2 flex items-center gap-2">
-            {!isChatOpen && (
-              <button onClick={() => setIsChatOpen(true)} className="p-2 text-muted hover:text-pixel-text transition-colors" title="Expand Chat">
-                <ChevronUp className="w-4 h-4" />
-              </button>
-            )}
-            <button
-              onClick={() => handleSendPrompt()}
-              disabled={loadingChat || !promptInput.trim()}
-              className="px-4 py-2 bg-pixel-purple text-bg hover:bg-purple-400 disabled:opacity-50 disabled:bg-pixel-border disabled:text-muted transition-colors rounded-sm shadow-[0_0_10px_rgba(163,113,247,0.3)]"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <button
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-bg2 border border-pixel-purple text-pixel-purple flex items-center justify-center hover:bg-pixel-purple hover:text-white transition-all shadow-[0_0_30px_rgba(163,113,247,0.2)] z-50 rounded-full"
+      >
+        <Bot className="w-5 h-5" />
+      </button>
 
+      {/* Global Highlights */}
+      <style jsx global>{`
+        .vulnerable-line-highlight { background: rgba(255, 95, 86, 0.12) !important; }
+        .vulnerable-glyph { background: #ff5f56 !important; width: 5px !important; margin-left: 2px !important; border-radius: 2px; box-shadow: 0 0 10px rgba(255, 95, 86, 0.5); }
+        .fixed-line-highlight { background: rgba(34, 197, 94, 0.12) !important; }
+        .fixed-glyph { background: #22c55e !important; width: 5px !important; margin-left: 2px !important; border-radius: 2px; box-shadow: 0 0 10px rgba(34, 197, 94, 0.5); }
+      `}</style>
     </div>
   );
 }

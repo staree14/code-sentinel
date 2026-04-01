@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Code, GitBranch, Terminal, AlertTriangle, ShieldCheck, FileCode2, Loader2, ArrowLeft, Send, Sparkles, Activity, Wrench, ChevronDown, ChevronUp, Bot, User, CheckCircle, Copy, Check } from "lucide-react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 
 interface Vulnerability {
   id: string;
@@ -41,6 +42,7 @@ export default function InteractiveDashboard() {
   const [expandedFixes, setExpandedFixes] = useState<Record<string, boolean>>({});
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [copiedFixId, setCopiedFixId] = useState<string | null>(null);
 
   // Chat & Process API state
   const [promptInput, setPromptInput] = useState("");
@@ -266,7 +268,7 @@ export default function InteractiveDashboard() {
                   <div className="flex items-center gap-2 text-pixel-blue">
                     <Activity className="w-4 h-4" /> <span className="font-press-start text-[0.55rem]">PERFORMANCE ANALYTICS</span>
                   </div>
-                  {latestAnalytics.security_scan.pii_detected && (
+                  {latestAnalytics.security_scan?.pii_detected && (
                     <span className="text-[10px] px-2 py-0.5 bg-pixel-red/20 text-pixel-red border border-pixel-red/40 flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3" /> PII DETECTED IN PROMPT
                     </span>
@@ -278,10 +280,10 @@ export default function InteractiveDashboard() {
                   <div className="border border-pixel-border bg-bg p-4 flex flex-col justify-between hover:border-pixel-green/30 transition-colors">
                     <div>
                       <p className="text-muted text-[10px] mb-2">ROUTING DECISION</p>
-                      <p className="text-pixel-green text-xl font-bold mb-1">{latestAnalytics.routing_decision.model_used}</p>
-                      <p className="text-xs text-pixel-text mb-2 border-l-2 border-pixel-green pl-2">{latestAnalytics.routing_decision.intent_detected}</p>
+                      <p className="text-pixel-green text-xl font-bold mb-1">{latestAnalytics.routing_decision?.model_used}</p>
+                      <p className="text-xs text-pixel-text mb-2 border-l-2 border-pixel-green pl-2">{latestAnalytics.routing_decision?.intent_detected}</p>
                     </div>
-                    <p className="text-[10px] text-muted leading-tight">{latestAnalytics.routing_decision.reason}</p>
+                    <p className="text-[10px] text-muted leading-tight">{latestAnalytics.routing_decision?.reason}</p>
                   </div>
 
                   {/* BOX 2 */}
@@ -290,15 +292,15 @@ export default function InteractiveDashboard() {
                       <p className="text-muted text-[10px] mb-2">PERFORMANCE METRICS</p>
                       <div className="flex justify-between items-end mb-2 border-b border-pixel-border/50 pb-2">
                         <span className="text-[10px] text-muted">LATENCY</span>
-                        <span className="text-pixel-blue text-lg">{latestAnalytics.performance_metrics.latency_sec}s</span>
+                        <span className="text-pixel-blue text-lg">{latestAnalytics.performance_metrics?.latency_sec}s</span>
                       </div>
                       <div className="flex justify-between items-end mb-2">
                         <span className="text-[10px] text-muted">TOKENS</span>
-                        <span className="text-pixel-text text-sm">{latestAnalytics.performance_metrics.tokens_processed}</span>
+                        <span className="text-pixel-text text-sm">{latestAnalytics.performance_metrics?.tokens_processed}</span>
                       </div>
                     </div>
                     <p className="text-[10px] text-pixel-blue bg-pixel-blue/10 px-2 py-1 inline-block w-fit mt-2 border border-pixel-blue/20">
-                      {latestAnalytics.performance_metrics.speed_improvement_vs_pro}
+                      {latestAnalytics.performance_metrics?.speed_improvement_vs_pro}
                     </p>
                   </div>
 
@@ -308,12 +310,12 @@ export default function InteractiveDashboard() {
                     <div>
                       <p className="text-muted text-[10px] mb-2 z-10 relative">BUSINESS IMPACT</p>
                       <div className="relative z-10">
-                        <p className="text-pixel-green text-3xl font-black mb-1 drop-shadow-[0_0_10px_rgba(57,211,83,0.3)]">{latestAnalytics.business_impact.cost_reduction_percentage}</p>
+                        <p className="text-pixel-green text-3xl font-black mb-1 drop-shadow-[0_0_10px_rgba(57,211,83,0.3)]">{latestAnalytics.business_impact?.cost_reduction_percentage}</p>
                         <p className="text-xs text-pixel-text mb-4 border-l-2 border-pixel-green pl-2">Cost Reduction</p>
                       </div>
                       <div className="flex justify-between items-end mb-2 relative z-10 border-t border-pixel-border/50 pt-2">
                         <span className="text-[10px] text-muted">SAVED / REQ</span>
-                        <span className="text-aws-orange text-sm font-bold">${latestAnalytics.business_impact.dollars_saved}</span>
+                        <span className="text-aws-orange text-sm font-bold">${latestAnalytics.business_impact?.dollars_saved}</span>
                       </div>
                     </div>
                   </div>
@@ -449,11 +451,54 @@ export default function InteractiveDashboard() {
                       {chat.role === "user" ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
                     </div>
 
-                    <div className={`p-5 text-sm font-mono whitespace-pre-wrap rounded-sm ${chat.role === "user"
+                    <div className={`p-5 text-sm font-mono whitespace-pre-wrap rounded-sm overflow-hidden ${chat.role === "user"
                       ? "bg-bg2 border border-pixel-border text-pixel-text"
                       : "bg-[#110e19] border border-pixel-purple/30 text-pixel-text shadow-[0_0_15px_rgba(163,113,247,0.05)]"
                       }`}>
-                      {chat.text}
+                      {chat.role === "user" ? (
+                        chat.text
+                      ) : (
+                        <div className="prose-invert prose-p:leading-relaxed prose-pre:m-0 prose-pre:bg-transparent">
+                          <ReactMarkdown
+                            components={{
+                              code({ node, inline, className, children, ...props }: any) {
+                                const match = /language-(\w+)/.exec(className || '');
+                                return !inline ? (
+                                  <div className="border border-pixel-purple/40 rounded-sm my-6 overflow-hidden bg-bg shadow-lg">
+                                    <div className="bg-pixel-purple/10 px-4 py-2 border-b border-pixel-purple/40 text-[10px] text-pixel-purple font-mono uppercase font-bold flex items-center gap-2">
+                                      <Code className="w-3 h-3" />
+                                      {match?.[1] || 'snippet'}
+                                    </div>
+                                    <pre className="p-4 overflow-x-auto text-[13px] text-pixel-text/90 leading-relaxed">
+                                      <code className={className} {...props}>
+                                        {children}
+                                      </code>
+                                    </pre>
+                                  </div>
+                                ) : (
+                                  <code className="bg-pixel-purple/10 border border-pixel-purple/20 px-1.5 py-0.5 mt-0.5 inline-block rounded-sm text-pixel-purple text-xs" {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              },
+                              p({ children }) {
+                                return <p className="mb-4 last:mb-0 leading-relaxed text-pixel-text/90">{children}</p>;
+                              },
+                              ul({ children }) {
+                                return <ul className="list-disc pl-6 mb-4 space-y-2 text-pixel-text/90">{children}</ul>;
+                              },
+                              ol({ children }) {
+                                return <ol className="list-decimal pl-6 mb-4 space-y-2 text-pixel-text/90">{children}</ol>;
+                              },
+                              h1({ children }) { return <h1 className="text-pixel-purple text-lg font-bold mb-4 mt-6">{children}</h1>; },
+                              h2({ children }) { return <h2 className="text-pixel-purple text-base font-bold mb-3 mt-5">{children}</h2>; },
+                              h3({ children }) { return <h3 className="text-pixel-purple text-sm font-bold mb-2 mt-4">{children}</h3>; }
+                            }}
+                          >
+                            {chat.text}
+                          </ReactMarkdown>
+                        </div>
+                      )}
                     </div>
 
                   </div>

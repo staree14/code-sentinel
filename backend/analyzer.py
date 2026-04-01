@@ -1,5 +1,31 @@
 import re
 import json
+import os
+
+# -------- FILE PARSER -------- #
+def parse_file(file_path):
+    """
+    Reads a file and detects its security analysis type.
+    Returns: tuple (file_path, content, type)
+    """
+    if not os.path.exists(file_path):
+        return None
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    ext = os.path.splitext(file_path)[1].lower()
+    
+    if ext in [".py", ".js"]:
+        file_type = "application code"
+    elif ext == ".json":
+        file_type = "IAM policies"
+    elif ext == ".tf":
+        file_type = "Terraform/IaC"
+    else:
+        file_type = "unknown"
+
+    return (file_path, content, file_type)
 
 # -------- CODE ANALYZER -------- #
 def analyze_code(content):

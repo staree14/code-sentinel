@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Cpu, Zap } from "lucide-react";
+import { Play, Cpu, Zap, Upload } from "lucide-react";
 import { getMockAnalysis, SAMPLE_CODE, type AnalysisResult } from "@/lib/mock-analysis";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
@@ -25,11 +25,45 @@ interface Props {
   onResult: (r: AnalysisResult) => void;
 }
 
+import { useEffect } from "react";
+
 export function CodeEditor({ onResult }: Props) {
   const [code, setCode] = useState(SAMPLE_CODE);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [samples, setSamples] = useState<string[]>([]);
   const editorRef = useRef<string>(SAMPLE_CODE);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("http://localhost:8000/api/samples")
+      .then(r => r.json())
+      .then(data => setSamples(data.samples || []))
+      .catch(e => console.warn("Failed to fetch samples:", e));
+  }, []);
+
+  async function handleLoadSample(name: string) {
+    try {
+      const r = await fetch(`http://localhost:8000/api/sample/${name}`);
+      const data = await r.json();
+      setCode(data.content);
+      editorRef.current = data.content;
+    } catch (e) {
+      console.warn("Failed to load sample:", e);
+    }
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = ev.target?.result as string;
+      setCode(content);
+      editorRef.current = content;
+    };
+    reader.readAsText(file);
+  }
 
   async function handleAnalyze() {
     setAnalyzing(true);
@@ -98,6 +132,35 @@ export function CodeEditor({ onResult }: Props) {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Sample Picker */}
+          {samples.length > 0 && (
+            <select
+              onChange={(e) => handleLoadSample(e.target.value)}
+              className="text-xs px-2 py-1 pixel-border bg-[#0d0d0d]"
+              style={{ color: "var(--muted)", borderColor: "rgba(255,255,255,0.1)" }}
+            >
+              <option value="">Load Sample...</option>
+              {samples.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+
+          {/* Upload Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs border border-white/5 hover:bg-white/5 transition-colors"
+            style={{ color: "var(--muted)" }}
+            title="Import Local File"
+          >
+            <Upload size={12} />
+            Import
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
           {/* model badge */}
           <AnimatePresence>
             {result && (

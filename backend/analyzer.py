@@ -33,37 +33,57 @@ def analyze_code(content):
 
     if re.search(r'password\s*=\s*["\'].*["\']', content, re.IGNORECASE):
         issues.append({
-            "issue": "Hardcoded password",
+            "id": "L-001",
+            "title": "Hardcoded password",
             "severity": "HIGH",
-            "fix": "Use environment variables"
+            "category": "Secrets Management",
+            "cwe": "CWE-798",
+            "description": "Hardcoded credentials can easily be leaked through source code version control.",
+            "fix": "Use environment variables or AWS Secrets Manager."
         })
 
     if re.search(r'api[_-]?key\s*=\s*["\'].*["\']', content.lower()):
         issues.append({
-            "issue": "Hardcoded API key",
+            "id": "L-002",
+            "title": "Hardcoded API key",
             "severity": "HIGH",
-            "fix": "Store secrets securely"
+            "category": "Secrets Management",
+            "cwe": "CWE-798",
+            "description": "Exposing API keys in source code allows unauthorized access to services.",
+            "fix": "Store secrets securely in an encrypted vault."
         })
 
     if re.search(r"(SELECT|INSERT|UPDATE|DELETE).*[\+].*", content, re.IGNORECASE):
         issues.append({
-            "issue": "Possible SQL Injection",
+            "id": "L-003",
+            "title": "Possible SQL Injection",
             "severity": "HIGH",
-            "fix": "Use parameterized queries instead of string concatenation"
+            "category": "Injection",
+            "cwe": "CWE-89",
+            "description": "User input is directly concatenated into a query, allowing attackers to modify the SQL command.",
+            "fix": "Use parameterized queries or ORM models instead of string concatenation."
         })
 
     if "jwt" in content.lower() and ("secret" in content.lower() or "key" in content.lower()):
         issues.append({
-            "issue": "Hardcoded JWT secret",
+            "id": "L-004",
+            "title": "Hardcoded JWT secret",
             "severity": "HIGH",
-            "fix": "Store JWT secrets securely"
+            "category": "Cryptography",
+            "cwe": "CWE-321",
+            "description": "A hardcoded JWT secret allows anyone with access to the code to forge authentication tokens.",
+            "fix": "Store JWT signing keys in a secure environment variable."
         })
 
     if "eval(" in content:
         issues.append({
-            "issue": "Use of eval()",
+            "id": "L-005",
+            "title": "Use of eval()",
             "severity": "CRITICAL",
-            "fix": "Avoid eval()"
+            "category": "Injection",
+            "cwe": "CWE-95",
+            "description": "eval() executes raw strings as code, presenting a massive security risk if the input is untrusted.",
+            "fix": "Avoid eval() entirely; use safer alternatives like JSON parsing."
         })
 
     return issues
@@ -79,23 +99,33 @@ def analyze_iam(content):
 
         if "*" in str(actions):
             issues.append({
-                "issue": "Overly permissive IAM action",
+                "id": "L-101",
+                "title": "Overly permissive IAM action",
                 "severity": "CRITICAL",
-                "fix": "Restrict IAM actions to least privilege"
+                "category": "Access Control",
+                "cwe": "CWE-200",
+                "description": "Wildcard actions allow broad permissions that violate the principle of least privilege.",
+                "fix": "Restrict IAM actions to specific API calls."
             })
 
         if "*" in str(resources):
             issues.append({
-                "issue": "Wildcard resource access",
+                "id": "L-102",
+                "title": "Wildcard resource access",
                 "severity": "HIGH",
-                "fix": "Limit resource scope"
+                "category": "Access Control",
+                "cwe": "CWE-200",
+                "description": "Providing access to all resources (*) can lead to unauthorized data exposure.",
+                "fix": "Limit resource scope to specific ARNs."
             })
 
     except:
         issues.append({
-            "issue": "Invalid IAM JSON",
+            "id": "L-103",
+            "title": "Invalid IAM JSON",
             "severity": "HIGH",
-            "fix": "Check IAM policy syntax"
+            "category": "Syntax",
+            "fix": "Check IAM policy JSON syntax."
         })
 
     return issues
@@ -106,16 +136,24 @@ def analyze_terraform(content):
 
     if "0.0.0.0/0" in content:
         issues.append({
-            "issue": "Open security group",
+            "id": "L-201",
+            "title": "Open security group",
             "severity": "CRITICAL",
-            "fix": "Restrict IP ranges"
+            "category": "Infrastructure",
+            "cwe": "CWE-200",
+            "description": "Security groups open to 0.0.0.0/0 allow traffic from the entire internet.",
+            "fix": "Restrict IP ranges to specific CIDR blocks or internal networks."
         })
 
     if "aws_s3_bucket" in content and ("acl" in content.lower() or "public" in content.lower()):
         issues.append({
-            "issue": "Potential public S3 bucket",
+            "id": "L-202",
+            "title": "Potential public S3 bucket",
             "severity": "CRITICAL",
-            "fix": "Enable block public access and restrict ACL"
+            "category": "Storage",
+            "cwe": "CWE-200",
+            "description": "S3 buckets with public ACLs can lead to data leaks and mass exfiltration.",
+            "fix": "Enable block public access settings and use private ACLs."
         })
 
     return issues

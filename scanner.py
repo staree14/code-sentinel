@@ -10,7 +10,7 @@ client = genai.Client()
 
 # Toggle between local analyzer or Gemini LLM
 USE_LLM = False  # set True to use Gemini
-GEMINI_MODEL = 'gemini-1.5-flash'  # Use a valid model name
+GEMINI_MODEL = 'gemini-2.0-flash'  # Use a valid model name (Updated to 2.0)
 
 # Path to test samples folder
 SAMPLES_FOLDER = "backend/test_samples"
@@ -60,6 +60,10 @@ def run_analysis(file_path, use_llm=False):
             print(f"- {issue['issue']} [{issue['severity']}]: {issue['fix']}")
 
 # Scan all files in the test_samples folder
-for file_name in os.listdir(SAMPLES_FOLDER):
-    file_path = os.path.join(SAMPLES_FOLDER, file_name)
-    run_analysis(file_path, use_llm=USE_LLM)
+if os.path.exists(SAMPLES_FOLDER):
+    for file_name in os.listdir(SAMPLES_FOLDER):
+        file_path = os.path.join(SAMPLES_FOLDER, file_name)
+        if os.path.isfile(file_path):
+            run_analysis(file_path, use_llm=USE_LLM)
+else:
+    print(f"Samples folder not found: {SAMPLES_FOLDER}")

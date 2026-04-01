@@ -14,7 +14,7 @@ const SEVERITY_META: Record<Severity, { label: string; color: string; Icon: Luci
 
 function VulnCard({ v }: { v: Vulnerability }) {
   const [open, setOpen] = useState(false);
-  const meta = SEVERITY_META[v.severity];
+  const meta = SEVERITY_META[v.severity.toLowerCase() as Severity] || SEVERITY_META.low;
   const Icon = meta.Icon;
 
   return (
@@ -134,7 +134,7 @@ export function SecurityReport({ vulnerabilities }: Props) {
       <div className="flex flex-wrap items-center gap-3 mb-6">
         {(["all", "critical", "high", "medium", "low"] as const).map((s) => {
           const active = filter === s;
-          const meta = s !== "all" ? SEVERITY_META[s] : null;
+          const meta = s !== "all" ? SEVERITY_META[s.toLowerCase() as Severity] : null;
           const count = s === "all" ? vulnerabilities.length : counts[s];
           return (
             <button

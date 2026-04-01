@@ -19,6 +19,8 @@ interface Vulnerability {
   cwe?: string;
   description: string;
   fix: string;
+  original_snippet?: string;
+  fixed_snippet?: string;
 }
 
 interface AnalyticsData {
@@ -169,6 +171,23 @@ export default function InteractiveDashboard() {
     navigator.clipboard.writeText(code);
     setCopiedFixId(id);
     setTimeout(() => setCopiedFixId(null), 2000);
+  };
+
+  const handleApplyFix = (original: string, fixed: string) => {
+    if (!original || !fixed) return;
+
+    setCode(prevCode => {
+      // 1. Exact match
+      let newCode = prevCode.replace(original, fixed);
+      if (newCode !== prevCode) return newCode;
+
+      // 2. Trimmed match (handles AI padding)
+      newCode = prevCode.replace(original.trim(), fixed.trim());
+      if (newCode !== prevCode) return newCode;
+
+      setScanError("Matching error: The AI's suggested snippet didn't exactly match your editor content. Try clicking 'Explain' for guidance.");
+      return prevCode;
+    });
   };
 
   return (
@@ -420,6 +439,14 @@ export default function InteractiveDashboard() {
                     <button onClick={() => explainVulnerability(vuln.title, vuln.description)} className="flex items-center gap-2 text-xs bg-bg border border-pixel-border px-3 py-1.5 hover:bg-bg3 hover:text-pixel-purple transition-colors">
                       <Sparkles className="w-3 h-3 text-pixel-purple" /> EXPLAIN THIS
                     </button>
+                    {vuln.fixed_snippet && vuln.original_snippet && (
+                      <button
+                        onClick={() => handleApplyFix(vuln.original_snippet!, vuln.fixed_snippet!)}
+                        className="flex items-center gap-2 text-xs bg-pixel-green/20 text-pixel-green border border-pixel-green/40 px-3 py-1.5 hover:bg-pixel-green hover:text-bg transition-colors font-bold"
+                      >
+                        <Check className="w-3 h-3" /> APPLY FIX
+                      </button>
+                    )}
                   </div>
 
                   {/* Fix Area */}

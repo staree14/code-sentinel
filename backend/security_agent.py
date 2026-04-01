@@ -44,9 +44,13 @@ def scan_code(code_text: str) -> list:
         "category": "e.g. Injection, Secrets Management, etc.",
         "cwe": "CWE-XXX",
         "description": "Short explanation of the risk",
-        "fix": "Specific remediated code snippet or actionable advice"
+        "original_snippet": "The EXACT piece of code that is vulnerable (needed for replacement)",
+        "fixed_snippet": "The CORRECTED piece of code to replace the original_snippet with",
+        "fix": "Actionable advice or a specific code snippet explanation"
       }}
     ]
+
+    IMPORTANT: For 'original_snippet' and 'fixed_snippet', ONLY focus on the specific vulnerability mentioned in that JSON object. Do NOT fix other vulnerabilities in these fields.
     """
     
     model_id = "amazon.nova-lite-v1:0"
@@ -69,10 +73,14 @@ def scan_code(code_text: str) -> list:
         
         output_text = response['output']['message']['content'][0]['text']
         
-        # Bedrock models sometimes return markdown code blocks like ```json ... ```
-        # We need to strip this before passing it to json.loads
-        clean_json = re.sub(r'^```[a-z]*\s*', '', output_text.strip(), flags=re.IGNORECASE)
-        clean_json = re.sub(r'\s*```$', '', clean_json)
+        # More robust extraction: find the first '[' and last ']' to extract the JSON array
+        json_match = re.search(r'\[.*\]', output_text, re.DOTALL)
+        if json_match:
+            clean_json = json_match.group(0)
+        else:
+            # Fallback to the original logic if no array found
+            clean_json = re.sub(r'^```[a-z]*\s*', '', output_text.strip(), flags=re.IGNORECASE)
+            clean_json = re.sub(r'\s*```$', '', clean_json)
         
         try:
             vulns = json.loads(clean_json)
@@ -86,7 +94,10 @@ def scan_code(code_text: str) -> list:
                 "title": "Error parsing JSON from Bedrock LLM",
                 "severity": "CRITICAL",
                 "description": "The AI provided a response that couldn't be parsed as a structured report.",
-                "fix": f"Raw Output: {output_text}"
+                "fix": "Please try scanning again.",
+                "original_snippet": None,
+                "fixed_snippet": None,
+                "raw_debug": output_text[:1000] # for debugging
             }]
             
     except Exception as e:

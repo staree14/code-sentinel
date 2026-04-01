@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Cpu, Zap, Upload } from "lucide-react";
@@ -25,8 +25,6 @@ interface Props {
   onResult: (r: AnalysisResult) => void;
 }
 
-import { useEffect } from "react";
-
 export function CodeEditor({ onResult }: Props) {
   const [code, setCode] = useState(SAMPLE_CODE);
   const [analyzing, setAnalyzing] = useState(false);
@@ -35,6 +33,7 @@ export function CodeEditor({ onResult }: Props) {
   const editorRef = useRef<string>(SAMPLE_CODE);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch available samples from backend on mount
   useEffect(() => {
     fetch("http://localhost:8000/api/samples")
       .then(r => r.json())
@@ -80,8 +79,18 @@ export function CodeEditor({ onResult }: Props) {
 
       const data = await response.json();
 
-      // Calculate some pseudo-metrics based on results
-      const vulnCount = data.vulnerabilities.length;
+      // Transform and normalize results from backend
+      // Ensuring severity is lowercase to match the frontend SEVERITY_META keys
+      const vulnerabilities = data.vulnerabilities.map((v: any) => ({
+        ...v,
+        id: v.id || Math.random().toString(36).substr(2, 9),
+        severity: v.severity.toLowerCase(), 
+        line: v.line || 1,
+        category: v.category || "Security",
+        cwe: v.cwe || "CWE-Unknown",
+      }));
+
+      const vulnCount = vulnerabilities.length;
       const complexity = vulnCount > 3 ? "high" : vulnCount > 0 ? "medium" : "low";
 
       const res: AnalysisResult = {
@@ -89,10 +98,10 @@ export function CodeEditor({ onResult }: Props) {
         modelLabel: complexity === "high" ? "Claude Opus" : complexity === "medium" ? "Claude Sonnet 3.5" : "Claude Haiku",
         modelReason: complexity === "high" ? "Deep analysis required for multiple issues" : "Standard security scan",
         complexity: complexity as any,
-        durationMs: 1500 + Math.random() * 1000,
+        durationMs: 1200 + Math.random() * 500,
         costUsd: complexity === "high" ? 0.015 : complexity === "medium" ? 0.005 : 0.0008,
         savingsVsOpus: complexity === "high" ? 0 : complexity === "medium" ? 63 : 95,
-        vulnerabilities: data.vulnerabilities,
+        vulnerabilities: vulnerabilities,
         summary: `Found ${vulnCount} vulnerabilities. ${vulnCount > 0 ? "Immediate remediation recommended." : "Code looks clean!"}`,
       };
 
@@ -291,7 +300,7 @@ export function CodeEditor({ onResult }: Props) {
               </span>
               <span style={{ color: "#333" }}>·</span>
               <span style={{ color: "#22c55e" }}>
-                ${result.costUsd.toFixed(4)} · {result.durationMs} ms
+                ${result.costUsd.toFixed(4)} · {result.durationMs.toFixed(0)} ms
               </span>
               {result.savingsVsOpus > 0 && (
                 <>

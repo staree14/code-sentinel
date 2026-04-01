@@ -44,7 +44,9 @@ _SCHEMA_EXAMPLE = """[
     "category": "e.g. IAM Policy, Secrets Management, Injection",
     "cwe": "CWE-XXX",
     "description": "Short explanation of the risk",
-    "fix": "Specific remediated code snippet or actionable advice"
+    "fix": "Full explanation and remediation advice",
+    "original_snippet": "The exact vulnerable lines from the input (copy them verbatim, or null if not applicable)",
+    "fixed_snippet": "The corrected version of those exact lines (or null if not applicable)"
   }
 ]"""
 

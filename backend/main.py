@@ -21,8 +21,9 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
-# Load .env before anything that reads env-vars (boto3 client, etc.)
-load_dotenv()
+# Load .env from project root (parent of backend/)
+_env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(_env_path)
 
 from models.schemas import (
     BusinessImpact,

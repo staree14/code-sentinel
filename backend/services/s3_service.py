@@ -4,21 +4,28 @@ import boto3
 from botocore.exceptions import ClientError
 from datetime import datetime
 
-# Bucket configuration from .env is handled via boto3 default session
-BUCKET_NAME = "sam-first-s3-bucket1012"
-REGION = "us-east-1"
+# Read from .env — fallback to friend's bucket if not set
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "sam-first-s3-bucket1012")
+REGION = os.getenv("AWS_REGION", "us-east-1")
 
-s3_client = boto3.client(
-    "s3",
-    region_name=REGION,
-    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-)
+# Lazy client — instantiated on first call so dotenv is loaded by then
+_s3_client = None
+
+def _get_client():
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client(
+            "s3",
+            region_name=os.getenv("AWS_REGION", REGION),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        )
+    return _s3_client
 
 def upload_to_s3(key, data):
     """Uploads a dictionary as JSON to S3."""
     try:
-        s3_client.put_object(
+        _get_client().put_object(
             Bucket=BUCKET_NAME,
             Key=key,
             Body=json.dumps(data, indent=2),
@@ -32,7 +39,7 @@ def upload_to_s3(key, data):
 def get_from_s3(key):
     """Fetches a JSON object from S3 and returns a dictionary."""
     try:
-        response = s3_client.get_object(Bucket=BUCKET_NAME, Key=key)
+        response = _get_client().get_object(Bucket=BUCKET_NAME, Key=key)
         content = response["Body"].read().decode("utf-8")
         return json.loads(content)
     except ClientError as e:
@@ -44,7 +51,7 @@ def get_from_s3(key):
 def list_s3_objects(prefix):
     """Lists keys in S3 with a given prefix."""
     try:
-        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+        response = _get_client().list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
         if "Contents" not in response:
             return []
         return [obj["Key"] for obj in response["Contents"]]

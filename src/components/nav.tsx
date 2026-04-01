@@ -62,13 +62,22 @@ export function Nav() {
       </nav>
 
       {/* CTA */}
-      <Link
-        href="/demo"
-        className="btn-primary-pixel"
-        style={{ fontSize: "0.55rem" }}
-      >
-        {pathname === "/demo" ? "← BACK" : "TRY DEMO"}
-      </Link>
+      <div className="flex gap-3">
+        <Link
+          href="/scanner"
+          className="btn-secondary-pixel"
+          style={{ fontSize: "0.55rem", borderColor: "var(--pixel-purple)", color: "var(--pixel-purple)" }}
+        >
+          {pathname === "/scanner" ? "← BACK" : "AGENT TERMINAL"}
+        </Link>
+        <Link
+          href="/demo"
+          className="btn-primary-pixel"
+          style={{ fontSize: "0.55rem" }}
+        >
+          {pathname === "/demo" ? "← BACK" : "LIVE DEMO UI"}
+        </Link>
+      </div>
     </header>
   );
 }

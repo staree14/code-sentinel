@@ -2,19 +2,18 @@
 main.py
 FastAPI entry-point for the Intelligent LLM Middleware.
 
-Flow: POST /process
-  1. Classify  – analyze_prompt()  → token_count, intent, complexity_score, security_scan
-  2. Route     – get_route()       → model_id + full dashboard analytics
-  3. Execute   – invoke_nova()     → AI answer  (boto3 call – NOT modified)
-  4. Return    – answer + four nested dashboard objects
+Combines the /process route (Classifier + RAG + Router) 
+and the /api/scan route (Direct Bedrock Security Agent).
 """
 
 import time
 from contextlib import asynccontextmanager
+from typing import List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 # Load .env before anything that reads env-vars (boto3 client, etc.)
 load_dotenv()
@@ -31,6 +30,7 @@ from services.bedrock import invoke_nova
 from services.classifier import analyze_prompt
 from services.router import get_route
 from utils.loggers import get_logger
+from security_agent import scan_code
 
 logger = get_logger(__name__)
 
@@ -47,17 +47,16 @@ async def lifespan(app: FastAPI):
 # ── App factory ────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="Intelligent LLM Middleware",
+    title="Intelligent LLM Middleware & Security API",
     description=(
-        "Routes prompts to the most cost-effective Amazon Nova model "
-        "using classifier + router heuristics. Returns a rich, nested "
-        "JSON payload for the AI Management dashboard."
+        "Combined backend supporting both middleware routing Analytics and "
+        "direct Security Agent code scanning for CodeSentinel."
     ),
     version="2.0.0",
     lifespan=lifespan,
 )
 
-# CORS — allow all origins for frontend integration (tighten in production)
+# CORS — allow all origins for frontend integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -65,6 +64,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Schemas for Security Agent Endpoint ────────────────────────────────────────
+
+class ScanRequest(BaseModel):
+    code: str
+    
+class Vulnerability(BaseModel):
+    id: str
+    title: str
+    severity: str
+    line: int
+    category: str
+    cwe: str
+    description: str
+    fix: str
+
+class ScanResponse(BaseModel):
+    status: str
+    vulnerabilities: List[Vulnerability]
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -75,23 +94,41 @@ async def health_check():
     return {"status": "ok", "version": "2.0.0"}
 
 
+@app.post("/api/scan", response_model=ScanResponse, tags=["Security"])
+async def analyze_code(request: ScanRequest):
+    """
+    Direct Security Agent endpoint.
+    Takes source code or IaC and runs it through the Security Agent 
+    (Bedrock LLM) to find vulnerabilities directly, bypassing the router.
+    """
+    try:
+        logger.info("Received code scan request.")
+        if not request.code or request.code.strip() == "":
+            raise HTTPException(status_code=400, detail="Code cannot be empty")
+            
+        # Send raw code directly to the security agent
+        results = scan_code(request.code)
+        
+        return ScanResponse(
+            status="success",
+            vulnerabilities=results
+        )
+    except Exception as e:
+        logger.error(f"Error during scan: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/process", response_model=ProcessResponse, tags=["Inference"])
 async def process_prompt(request: PromptRequest):
     """
-    Main pipeline endpoint.
-
+    Middleware pipeline endpoint.
     Body → { "prompt": "<your text>" }
-
-    Returns the AI answer plus four dashboard sections:
-      - routing_decision
-      - performance_metrics
-      - business_impact
-      - security_scan
+    Returns the AI answer plus full dashboard analytics metrics.
     """
     prompt = request.prompt
     logger.info("Received prompt (%d chars)", len(prompt))
 
-    # ── Step 1: Classify ──────────────────────────────────────────────────────
+    # Step 1: Classify
     try:
         clf = analyze_prompt(prompt)
     except Exception as exc:
@@ -108,7 +145,7 @@ async def process_prompt(request: PromptRequest):
         intent, complexity, token_count, sec_scan["risk_level"],
     )
 
-    # ── Step 2: Route ─────────────────────────────────────────────────────────
+    # Step 2: Route
     try:
         route = get_route(complexity, intent, token_count)
     except Exception as exc:
@@ -117,7 +154,7 @@ async def process_prompt(request: PromptRequest):
 
     logger.info("Routed to %s (%s)", route["model_name"], route["model_id"])
 
-    # ── Step 3: Invoke Bedrock (boto3 — unchanged) ────────────────────────────
+    # Step 3: Invoke Bedrock
     t0 = time.perf_counter()
     try:
         answer = invoke_nova(prompt, route["model_id"])
@@ -128,90 +165,27 @@ async def process_prompt(request: PromptRequest):
 
     logger.info("Response received in %.3fs via %s", latency, route["model_name"])
 
-    # ── Step 4: Build nested response ─────────────────────────────────────────
+    # Step 4: Build nested response
     return ProcessResponse(
         answer=answer,
-
         routing_decision=RoutingDecision(
             model_used=route["model_name"],
             complexity_rank=route["complexity_rank"],
             intent_detected=route["intent_detected"],
             reason=route["reason"],
         ),
-
         performance_metrics=PerformanceMetrics(
             tokens_processed=token_count,
             latency_sec=latency,
             speed_improvement_vs_pro=route["speed_improvement_vs_pro"],
         ),
-
         business_impact=BusinessImpact(
             dollars_saved=route["dollars_saved"],
             cost_reduction_percentage=route["cost_reduction_percentage"],
             projected_monthly_savings=route["projected_monthly_savings"],
         ),
-
         security_scan=SecurityScan(
             risk_level=sec_scan["risk_level"],
             pii_detected=sec_scan["pii_detected"],
         ),
     )
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
-import logging
-from security_agent import scan_code
-
-# Configure basic logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-app = FastAPI(title="CodeSentinel Security API")
-
-# Setup CORS to allow your Next.js frontend to talk to this API
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins for development
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
-
-class ScanRequest(BaseModel):
-    code: str
-    
-class Vulnerability(BaseModel):
-    vulnerability: str
-    severity: str
-    fix: str
-
-class ScanResponse(BaseModel):
-    status: str
-    vulnerabilities: List[Vulnerability]
-
-@app.post("/api/scan", response_model=ScanResponse)
-async def analyze_code(request: ScanRequest):
-    """
-    Endpoint that takes source code or IaC and runs it through the Security Agent 
-    (Bedrock LLM) to find vulnerabilities.
-    """
-    try:
-        logger.info("Received code scan request.")
-        if not request.code or request.code.strip() == "":
-            raise HTTPException(status_code=400, detail="Code cannot be empty")
-            
-        # Send raw code directly to the security agent (no router/classifier)
-        results = scan_code(request.code)
-        
-        return ScanResponse(
-            status="success",
-            vulnerabilities=results
-        )
-    except Exception as e:
-        logger.error(f"Error during scan: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok", "service": "CodeSentinel API"}

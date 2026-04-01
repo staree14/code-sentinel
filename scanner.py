@@ -1,93 +1,69 @@
+# scanner.py
 import os
 from dotenv import load_dotenv
-from google import genai
+from google import genai  # your Gemini client
+from backend.analyzer import analyze, parse_file  # local analyzer
 
-# Load environment variables from .env file
+# Load environment variables from .env
 load_dotenv()
-
-# The new client automatically grabs GOOGLE_API_KEY from your .env!
 client = genai.Client()
 
-# ============================================================
-# YOUR CODE GOES BELOW HERE
-# ============================================================
+# Toggle between local analyzer or Gemini LLM
+USE_LLM = False  # set True to use Gemini
+GEMINI_MODEL = 'gemini-2.0-flash'  # Use a valid model name (Updated to 2.0)
 
-# Test code with a security vulnerability
-# Vulnerable code example 1: SQL Injection
-vulnerable_code_1 = '''
-def get_user(username):
-    query = "SELECT * FROM users WHERE username = '" + username + "'"
-    cursor.execute(query)
-    return cursor.fetchone()
-'''
+# Path to test samples folder
+SAMPLES_FOLDER = "backend/test_samples"
 
-# Vulnerable code example 2: Hardcoded credentials
-vulnerable_code_2 = '''
-DATABASE_PASSWORD = "supersecret123"
-API_KEY = "sk-1234567890abcdef"
+def run_analysis(file_path, use_llm=False):
+    file_data = parse_file(file_path)
+    if not file_data:
+        print(f"{file_path} not found or unreadable. Skipping.")
+        return
 
-def connect_db():
-    return psycopg2.connect(
-        host="localhost",
-        password=DATABASE_PASSWORD
-    )
-'''
+    path, content, file_type = file_data
 
-# Vulnerable code example 3: Weak cryptography
-vulnerable_code_3 = '''
-import hashlib
+    if use_llm:
+        print(f"\n--- [LLM] Analyzing {path} ({file_type}) ---")
+        security_prompt = f"""
+        You are a security expert. Analyze this code for vulnerabilities.
 
-def hash_password(password):
-    return hashlib.md5(password.encode()).hexdigest()
-'''
+        For each issue, provide:
+        1. Vulnerability type
+        2. Why it's vulnerable (1 sentence)
+        3. Impact (1 sentence)
+        4. Secure code fix
 
+        Be concise.
 
-# Ask Gemini to analyze it
-security_prompt = """
-You are a security expert. Analyze this code for vulnerabilities.
+        Code:
+        {content}
+        """
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=security_prompt
+            )
+            print(f"\n--- LLM Analysis for {file_path} ---")
+            print(response.text)
+        except Exception as e:
+            print(f"Error calling Gemini: {str(e)}")
 
-For each issue, provide:
-1. Vulnerability type
-2. Why it's vulnerable (1 sentence)
-3. Impact (1 sentence)
-4. Secure code fix
+    else:
+        result = analyze(content, path)
+        print(f"\n--- [LOCAL] Analyzing {path} ({file_type}) ---")
+        print(f"Total Issues: {result['total']}")
+        print(f"Risk Score: {result['risk_score']}")
+        if result['total'] == 0:
+            print("No vulnerabilities found!")
+        for issue in result['issues']:
+            print(f"- {issue['issue']} [{issue['severity']}]: {issue['fix']}")
 
-Be concise.
-
-Code:
-{code}
-"""
-
-# Test with SQL injection example
-print("=" * 50)
-print("Analyzing SQL Injection Example...")
-print("=" * 50)
-
-response = client.models.generate_content(
-    model='gemini-2.0-flash',
-    contents=security_prompt.format(code=vulnerable_code_1)
-)
-print(response.text)
-
-# Test with hardcoded credentials
-print("\n" + "=" * 50)
-print("Analyzing Hardcoded Credentials Example...")
-print("=" * 50)
-
-response = client.models.generate_content(
-    model='gemini-2.0-flash',
-    contents=security_prompt.format(code=vulnerable_code_2)
-)
-print(response.text)
-
-# Test with weak cryptography
-print("\n" + "=" * 50)
-print("Analyzing Weak Cryptography Example...")
-print("=" * 50)
-
-response = client.models.generate_content(
-    model='gemini-2.0-flash',
-    contents=security_prompt.format(code=vulnerable_code_3)
-)
-print(response.text)
-
+# Scan all files in the test_samples folder
+if os.path.exists(SAMPLES_FOLDER):
+    for file_name in os.listdir(SAMPLES_FOLDER):
+        file_path = os.path.join(SAMPLES_FOLDER, file_name)
+        if os.path.isfile(file_path):
+            run_analysis(file_path, use_llm=USE_LLM)
+else:
+    print(f"Samples folder not found: {SAMPLES_FOLDER}")

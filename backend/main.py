@@ -1,12 +1,13 @@
 """
 main.py
-FastAPI entry-point for CodeSentinel - AI Security Code Review.
-
+Combined backend for CodeSentinel.
 Flows: 
 1. POST /process   - Intelligent Nova Middleware (Classifier + Router)
 2. POST /api/scan  - CodeSentinel Security Agent (Direct Bedrock Scan)
+3. GET /api/samples - Fetch available code samples
 """
 
+import os
 import time
 import logging
 from contextlib import asynccontextmanager
@@ -35,6 +36,8 @@ from utils.loggers import get_logger
 from security_agent import scan_code
 
 logger = get_logger(__name__)
+# The samples folder is inside the backend/ directory in the GitHub repo
+SAMPLES_DIR = os.path.join(os.path.dirname(__file__), "samples")
 
 # ── App lifecycle ──────────────────────────────────────────────────────────────
 
@@ -47,16 +50,16 @@ async def lifespan(app: FastAPI):
 # ── App factory ────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="CodeSentinel Security API",
+    title="Intelligent LLM Middleware & Security API",
     description=(
-        "Routes prompts to the most cost-effective Amazon Nova model "
-        "and provides direct security scanning via the CodeSentinel Security Agent."
+        "Combined backend supporting both middleware routing Analytics and "
+        "direct Security Agent code scanning for CodeSentinel."
     ),
     version="2.0.0",
     lifespan=lifespan,
 )
 
-# CORS — allow all origins for frontend integration (tighten in production)
+# CORS — allow all origins for frontend integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -65,14 +68,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Schemas for direct scanning ───────────────────────────────────────────────
+# ── Schemas for Security Agent Endpoint ────────────────────────────────────────
 
 class ScanRequest(BaseModel):
     code: str
     
 class Vulnerability(BaseModel):
-    vulnerability: str
+    id: str
+    title: str
     severity: str
+    line: Optional[int] = None
+    category: Optional[str] = None
+    cwe: Optional[str] = None
+    description: str
     fix: str
 
 class ScanResponse(BaseModel):
@@ -150,14 +158,16 @@ async def process_prompt(request: PromptRequest):
 @app.post("/api/scan", response_model=ScanResponse, tags=["Security"])
 async def analyze_code(request: ScanRequest):
     """
-    Endpoint that takes source code or IaC and runs it through the Security Agent 
-    (Bedrock LLM) to find vulnerabilities.
+    Direct Security Agent endpoint.
+    Takes source code or IaC and runs it through the Security Agent 
+    (Bedrock LLM) to find vulnerabilities directly, bypassing the router.
     """
     try:
         logger.info("Received code scan request.")
         if not request.code or request.code.strip() == "":
             raise HTTPException(status_code=400, detail="Code cannot be empty")
             
+        # Send raw code directly to the security agent
         results = scan_code(request.code)
         
         return ScanResponse(
@@ -167,3 +177,26 @@ async def analyze_code(request: ScanRequest):
     except Exception as e:
         logger.error(f"Error during scan: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/samples", tags=["Utilities"])
+async def list_samples():
+    """Returns a list of filenames in the samples directory."""
+    if not os.path.exists(SAMPLES_DIR):
+        return {"samples": []}
+    files = [f for f in os.listdir(SAMPLES_DIR) if os.path.isfile(os.path.join(SAMPLES_DIR, f))]
+    return {"samples": files}
+
+@app.get("/api/sample/{name}", tags=["Utilities"])
+async def get_sample(name: str):
+    """Returns the content of a specific sample file."""
+    path = os.path.join(SAMPLES_DIR, name)
+    # Basic security check to prevent path traversal
+    if not os.path.abspath(path).startswith(os.path.abspath(SAMPLES_DIR)):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Sample not found")
+    
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return {"content": content}

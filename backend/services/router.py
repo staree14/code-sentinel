@@ -20,6 +20,11 @@ _MODELS: dict[str, dict] = {
         "cost_per_1k": 0.00006,
         "speed_vs_pro_pct": 35,
     },
+    "Claude Haiku": {
+        "model_id": "anthropic.claude-3-haiku-20240307-v1:0",
+        "cost_per_1k": 0.00025,
+        "speed_vs_pro_pct": 80,
+    },
     "Nova Pro": {
         "model_id": "amazon.nova-pro-v1:0",
         "cost_per_1k": 0.0008,

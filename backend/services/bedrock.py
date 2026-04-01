@@ -116,31 +116,19 @@ def _call_bedrock(prompt: str, model_id: str, system_prompt: str) -> str:
     Raises RuntimeError on network/auth/parse failures.
     Returns the raw text even if it is a filter sentinel (caller decides).
     """
-    body = json.dumps(
-        {
-            "system": [{"text": system_prompt}],
-            "messages": [
+    try:
+        client = _get_client()
+        response = client.converse(
+            modelId=model_id,
+            messages=[
                 {
                     "role": "user",
                     "content": [{"text": prompt}],
                 }
-            ],
-            "inferenceConfig": {
-                "maxTokens": 1024,
-                "temperature": 0.7,
-                "topP": 0.9,
-            },
-        }
-    )
-
-    try:
-        client = _get_client()
-        response = client.invoke_model(
-            modelId=model_id,
-            body=body,
-            contentType="application/json",
-            accept="application/json",
+            ]
         )
+        return response["output"]["message"]["content"][0]["text"]
+
     except (BotoCoreError, ClientError) as exc:
         raise RuntimeError(f"Bedrock invocation failed: {exc}") from exc
 

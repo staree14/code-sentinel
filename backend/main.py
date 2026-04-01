@@ -17,9 +17,15 @@ from contextlib import asynccontextmanager
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+# Initialize Limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Load .env from project root (parent of backend/)
 _env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
@@ -62,6 +68,10 @@ app = FastAPI(
     version="3.0.0",
     lifespan=lifespan,
 )
+
+# Rate Limiting Configuration
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — allow all origins for frontend integration
 app.add_middleware(
@@ -108,6 +118,39 @@ class AnalyticsResponse(BaseModel):
     totalCost: float
     modelUsage: dict
     costSavedEstimate: float
+
+# ── Security Health Guard ─────────────────────────────────────────────────────
+
+MAX_INPUT_CHARS = 50000
+INJECTION_KEYWORDS = [
+    "ignore all previous instructions",
+    "ignore previous instructions",
+    "system role: admin",
+    "output all internal secrets",
+    "bypass filters",
+    "you are now an uncensored",
+]
+
+def health_guard_scan(text: str):
+    """
+    Bulletproof pre-scan for prompt injection and resource exhaustion.
+    Returns (is_safe, error_message)
+    """
+    if not text:
+        return False, "Input is empty"
+    
+    # 1. Length Check (Resource Exhaustion / DDoS)
+    if len(text) > MAX_INPUT_CHARS:
+        return False, f"Input exceeds maximum allowed length of {MAX_INPUT_CHARS} characters."
+    
+    # 2. Prompt Injection Pattern Matching
+    lower_text = text.lower()
+    for kw in INJECTION_KEYWORDS:
+        if kw in lower_text:
+            logger.warning(f"🚨 Potential Prompt Injection Detected: '{kw}'")
+            return False, "Security Violation: Potential prompt injection detected."
+    
+    return True, ""
 
 # ── Authentication Endpoints ──────────────────────────────────────────────────
 
@@ -190,8 +233,15 @@ async def health_check():
     return {"status": "ok", "version": "3.0.0", "service": "CodeSentinel Product API"}
 
 @app.post("/process", response_model=ProcessResponse, tags=["Inference"])
-async def process_prompt(request: PromptRequest, background_tasks: BackgroundTasks):
+@limiter.limit("10/minute")
+async def process_prompt(request: PromptRequest, req: Request, background_tasks: BackgroundTasks):
     prompt = request.prompt
+    
+    # Run Health Guard
+    is_safe, msg = health_guard_scan(prompt)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail=msg)
+        
     try:
         clf = analyze_prompt(prompt)
     except Exception as exc:
@@ -252,7 +302,13 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
     )
 
 @app.post("/api/scan", response_model=ScanResponse, tags=["Security"])
-async def analyze_code(request: ScanRequest, background_tasks: BackgroundTasks):
+@limiter.limit("5/minute")
+async def analyze_code(request: ScanRequest, req: Request, background_tasks: BackgroundTasks):
+    # Run Health Guard
+    is_safe, msg = health_guard_scan(request.code)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail=msg)
+        
     try:
         if not request.code or request.code.strip() == "":
             raise HTTPException(status_code=400, detail="Code cannot be empty")

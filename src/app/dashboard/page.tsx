@@ -29,7 +29,7 @@ interface Vulnerability {
 }
 
 interface AnalyticsData {
-  routing_decision: { model_used: string; reason: string; intent_detected: string };
+  routing_decision: { model_used: string; reason: string; intent_detected: string; complexity_rank: string };
   performance_metrics: { tokens_processed: number; latency_sec: number; speed_improvement_vs_pro: string };
   business_impact: { dollars_saved: string; cost_reduction_percentage: string; projected_monthly_savings: string };
   security_scan: { risk_level: string; pii_detected: boolean };
@@ -64,6 +64,26 @@ export default function DashboardPage() {
   const [chatSize, setChatSize] = useState<"half" | "full">("half");
   const [copiedFixId, setCopiedFixId] = useState<string | null>(null);
   const [fixedVulnIds, setFixedVulnIds] = useState<string[]>([]);
+  const [showBotGreeting, setShowBotGreeting] = useState(true);
+
+  // Risk Tags Helper
+  const getRiskTag = (vuln: Vulnerability) => {
+    const cat = (vuln.category || "").toLowerCase();
+    const title = vuln.title.toLowerCase();
+    const desc = vuln.description.toLowerCase();
+
+    if (cat.includes("iam") || title.includes("iam") || desc.includes("iam") || title.includes("policy") || desc.includes("access")) 
+      return { label: "IAM ACCESS", color: "border-pixel-blue text-pixel-blue bg-pixel-blue/5" };
+    if (cat.includes("iac") || title.includes("terraform") || title.includes("cloudformation") || desc.includes("infrastructure")) 
+      return { label: "IaC RISK", color: "border-pixel-purple text-pixel-purple bg-pixel-purple/5" };
+    if (cat.includes("docker") || title.includes("docker") || desc.includes("container") || title.includes("k8s")) 
+      return { label: "DOCKER RISK", color: "border-aws-orange text-aws-orange bg-aws-orange/5" };
+    if (cat.includes("network") || title.includes("port") || title.includes("ingress") || desc.includes("network") || title.includes("ddos") || desc.includes("ddos")) 
+      return { label: "DDOS RISK", color: "border-pixel-red text-pixel-red bg-pixel-red/5" };
+    
+    return { label: "CODE RISK", color: "border-pixel-green text-pixel-green bg-pixel-green/5" };
+  };
+
 
   // Chat state
   const [promptInput, setPromptInput] = useState("");
@@ -110,6 +130,11 @@ export default function DashboardPage() {
     const t = setTimeout(() => updateDecorations(), 50);
     return () => clearTimeout(t);
   }, [results, fixedVulnIds, code]);
+
+  useEffect(() => {
+    // Keep it always visible as requested
+    setShowBotGreeting(true);
+  }, []);
 
   useEffect(() => {
     if (isChatOpen) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -219,11 +244,11 @@ export default function DashboardPage() {
           {/* Left: Editor */}
           <div className="w-1/2 p-6 overflow-y-auto border-r border-pixel-border">
             <div className="max-w-2xl mx-auto pb-12">
-              <div className="flex gap-2 mb-6 border-b border-pixel-border pb-4">
+              <div className="flex gap-3 mb-8 border-b border-pixel-border pb-6">
                 {(["paste", "upload", "repo"] as const).map(tab => (
                   <button key={tab} onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 text-xs rounded-sm flex items-center gap-2 transition-colors ${activeTab === tab ? "bg-pixel-green/10 text-pixel-green border border-pixel-green/30 font-bold" : "text-muted hover:text-pixel-text"}`}>
-                    {tab === "paste" ? <><Code className="w-4 h-4" /> Paste</> : tab === "upload" ? <><Upload className="w-4 h-4" /> Upload</> : <><GitBranch className="w-4 h-4" /> Repo</>}
+                    className={`px-6 py-3 text-sm rounded-sm flex items-center gap-3 transition-colors ${activeTab === tab ? "bg-pixel-green/10 text-pixel-green border border-pixel-green/30 font-bold" : "text-muted hover:text-pixel-text"}`}>
+                    {tab === "paste" ? <><Code className="w-5 h-5" /> PASTE</> : tab === "upload" ? <><Upload className="w-5 h-5" /> UPLOAD</> : <><GitBranch className="w-5 h-5" /> REPO URL</>}
                   </button>
                 ))}
               </div>
@@ -273,10 +298,39 @@ export default function DashboardPage() {
             <AnimatePresence>
               {showAnalytics && latestAnalytics && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-bg3 border-b border-pixel-border p-6 z-20">
-                  <div className="grid grid-cols-3 gap-4 font-mono">
-                    <div className="border border-pixel-border bg-bg p-4"><p className="text-[10px] text-muted mb-2">MODEL</p><p className="text-pixel-green text-lg font-bold">{latestAnalytics.routing_decision?.model_used}</p></div>
-                    <div className="border border-pixel-border bg-bg p-4"><p className="text-[10px] text-muted mb-2">LATENCY</p><p className="text-pixel-blue text-lg">{latestAnalytics.performance_metrics?.latency_sec}s</p></div>
-                    <div className="border border-pixel-border bg-bg p-4"><p className="text-[10px] text-muted mb-2">SAVED</p><p className="text-pixel-green text-xl font-black">{latestAnalytics.business_impact?.cost_reduction_percentage}</p></div>
+                  <div className="font-mono space-y-2">
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="border border-pixel-green/30 bg-bg px-3 py-2">
+                        <p className="text-[9px] text-white/70 uppercase tracking-widest">Model</p>
+                        <p className="text-pixel-green text-xs font-bold">{latestAnalytics.routing_decision?.model_used}</p>
+                      </div>
+                      <div className="border border-pixel-border bg-bg px-3 py-2 col-span-2">
+                        <p className="text-[9px] text-white/70 uppercase tracking-widest">Intent</p>
+                        <p className="text-white text-xs truncate">{latestAnalytics.routing_decision?.intent_detected}</p>
+                      </div>
+                      <div className={`border px-3 py-2 bg-bg ${
+                        latestAnalytics.security_scan?.risk_level === 'HIGH' ? 'border-pixel-red/50' :
+                        latestAnalytics.security_scan?.risk_level === 'MEDIUM' ? 'border-pixel-yellow/50' : 'border-pixel-green/30'}`}>
+                        <p className="text-[9px] text-white/70 uppercase tracking-widest">Criticality</p>
+                        <p className={`text-xs font-black ${
+                          latestAnalytics.security_scan?.risk_level === 'HIGH' ? 'text-pixel-red' :
+                          latestAnalytics.security_scan?.risk_level === 'MEDIUM' ? 'text-pixel-yellow' : 'text-pixel-green'}`}>
+                          {latestAnalytics.security_scan?.risk_level || 'LOW'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 px-3 py-2 border border-pixel-border bg-bg text-[11px] flex-wrap">
+                      <span className="text-white/70">Latency <span className="text-pixel-blue font-bold">{latestAnalytics.performance_metrics?.latency_sec}s</span></span>
+                      <span className="text-pixel-border">·</span>
+                      <span className="text-white/70">Tokens <span className="text-white font-bold">{latestAnalytics.performance_metrics?.tokens_processed}</span></span>
+                      <span className="text-pixel-border">·</span>
+                      <span className="text-white/70">Cost Saved <span className="text-pixel-green font-bold">{latestAnalytics.business_impact?.cost_reduction_percentage}</span></span>
+                      <span className="text-pixel-border">·</span>
+                      <span className="text-white/70">$/mo Saved <span className="text-aws-orange font-bold">${latestAnalytics.business_impact?.projected_monthly_savings}</span></span>
+                      <span className={`ml-auto text-[9px] font-bold ${latestAnalytics.security_scan?.pii_detected ? 'text-pixel-red' : 'text-pixel-green'}`}>
+                        {latestAnalytics.security_scan?.pii_detected ? '⚠ PII DETECTED' : '✓ PII CLEAN'}
+                      </span>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -299,7 +353,16 @@ export default function DashboardPage() {
               {results?.map((vuln, i) => (
                 <div key={i} className="border border-pixel-border bg-bg2 p-5 font-mono hover:border-pixel-red/40 transition-all rounded-sm">
                   <div className="flex justify-between items-start mb-4">
-                    <div><span className="text-pixel-blue text-[10px] block mb-1">{vuln.id}</span><h3 className="text-pixel-text text-base font-bold">{vuln.title}</h3></div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-pixel-blue text-[10px]">{vuln.id}</span>
+                        {(() => {
+                          const tag = getRiskTag(vuln);
+                          return <span className={`text-[10px] px-2 py-0.5 border font-bold rounded-sm ${tag.color}`}>{tag.label}</span>;
+                        })()}
+                      </div>
+                      <h3 className="text-pixel-text text-base font-bold">{vuln.title}</h3>
+                    </div>
                     <span className={`text-[10px] px-2 py-1 border ${vuln.severity === "CRITICAL" ? "border-pixel-red text-pixel-red bg-pixel-red/10" : vuln.severity === "HIGH" ? "border-aws-orange text-aws-orange bg-aws-orange/10" : vuln.severity === "MEDIUM" ? "border-pixel-yellow text-pixel-yellow bg-pixel-yellow/10" : "border-pixel-green text-pixel-green bg-pixel-green/10"}`}>[{vuln.severity}]</span>
                   </div>
                   <div className="flex gap-4 mb-3 text-xs text-muted border-b border-pixel-border/50 pb-3">
@@ -312,11 +375,20 @@ export default function DashboardPage() {
                     <button onClick={() => toggleFix(vuln.id)} className="px-3 py-1.5 bg-bg border border-pixel-border text-[10px] flex items-center gap-2 hover:text-pixel-green transition-colors"><Wrench className="w-3 h-3" /> {expandedFixes[vuln.id] ? "HIDE FIX" : "SHOW FIX"}</button>
                     <button onClick={() => explainVulnerability(vuln.title, vuln.description)} className="px-3 py-1.5 bg-bg border border-pixel-border text-[10px] flex items-center gap-2 hover:text-pixel-purple transition-colors"><Sparkles className="w-3 h-3 text-pixel-purple" /> EXPLAIN</button>
                     <button
-                      onClick={() => vuln.fixed_snippet
-                        ? handleApplyFix(vuln.original_snippet!, vuln.fixed_snippet!, vuln.id)
-                        : explainVulnerability(vuln.title, `Apply this fix to my code:\n\n${vuln.fix}`)}
-                      className="px-3 py-1.5 bg-pixel-green/10 border border-pixel-green/30 text-pixel-green text-[10px] font-bold flex items-center gap-2 hover:bg-pixel-green hover:text-bg transition-all">
-                      <Check className="w-3 h-3" /> {vuln.fixed_snippet ? "APPLY FIX" : "QUICK FIX"}
+                      onClick={() => {
+                        if (fixedVulnIds.includes(vuln.id)) return;
+                        vuln.fixed_snippet
+                          ? handleApplyFix(vuln.original_snippet!, vuln.fixed_snippet!, vuln.id)
+                          : explainVulnerability(vuln.title, `Apply this fix to my code:\n\n${vuln.fix}`)
+                      }}
+                      disabled={fixedVulnIds.includes(vuln.id)}
+                      className={`px-3 py-1.5 border text-[10px] font-bold flex items-center gap-2 transition-all ${
+                        fixedVulnIds.includes(vuln.id) 
+                          ? "bg-pixel-green text-bg border-pixel-green cursor-default" 
+                          : "bg-pixel-green/10 border-pixel-green/30 text-pixel-green hover:bg-pixel-green hover:text-bg"
+                      }`}>
+                      {fixedVulnIds.includes(vuln.id) ? <CheckCircle className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+                      {fixedVulnIds.includes(vuln.id) ? "FIXED" : vuln.fixed_snippet ? "APPLY FIX" : "QUICK FIX"}
                     </button>
                   </div>
                   <AnimatePresence>
@@ -376,10 +448,28 @@ export default function DashboardPage() {
         </AnimatePresence>
 
         {/* Floating Chat Bubble */}
-        <button onClick={() => { setIsChatOpen(true); setChatSize("half"); }}
-          className={`fixed bottom-8 right-8 w-16 h-16 bg-bg2 border border-pixel-purple/50 text-pixel-purple flex items-center justify-center hover:bg-pixel-purple hover:text-white transition-all shadow-[0_0_40px_rgba(163,113,247,0.2)] z-40 rounded-full group ${isChatOpen ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
-          <Bot className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-        </button>
+        <div className="fixed bottom-8 right-8 z-40 flex flex-col items-end gap-3">
+          <AnimatePresence>
+            {showBotGreeting && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-bg2 border border-pixel-purple/50 px-6 py-4 rounded-sm shadow-[0_0_30px_rgba(163,113,247,0.15)] relative mb-2"
+              >
+                <div className="absolute -bottom-2 right-6 w-4 h-4 bg-bg2 border-b border-r border-pixel-purple/50 rotate-45"></div>
+                <p className="text-sm font-bold font-mono whitespace-nowrap text-pixel-purple flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  I AM YOUR SMART PROMPT ROUTER
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <button onClick={() => { setIsChatOpen(true); setChatSize("half"); }}
+            className={`w-16 h-16 bg-bg2 border border-pixel-purple/50 text-pixel-purple flex items-center justify-center hover:bg-pixel-purple hover:text-white transition-all shadow-[0_0_40px_rgba(163,113,247,0.2)] rounded-full group ${isChatOpen ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
+            <Bot className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+          </button>
+        </div>
       </main>
 
       <style jsx global>{`

@@ -93,7 +93,7 @@ export default function AnalyticsPage() {
           <div className="flex items-center gap-3">
             <button 
               onClick={fetchAnalytics}
-              className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-xs font-press-start text-[#444] hover:text-[var(--green)] transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-xs font-press-start text-white/70 hover:text-[var(--green)] transition-colors"
             >
               <RefreshCw size={14} />
               SYNC_DATA
@@ -125,7 +125,7 @@ export default function AnalyticsPage() {
               style={{ borderLeftColor: stat.color + "44" }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[0.55rem] font-press-start text-[#444] uppercase">{stat.label}</span>
+                <span className="text-[0.55rem] font-press-start text-white/90 uppercase">{stat.label}</span>
                 <stat.icon size={16} style={{ color: stat.color }} />
               </div>
               <div className="text-2xl font-bold font-mono tracking-tighter" style={{ color: stat.color }}>
@@ -143,7 +143,7 @@ export default function AnalyticsPage() {
             animate={{ opacity: 1 }}
             className="pixel-border bg-[#0d0d0d] p-6 h-[400px] flex flex-col"
           >
-            <h3 className="text-xs font-press-start text-[#444] mb-8 uppercase tracking-widest flex items-center gap-2">
+            <h3 className="text-xs font-press-start text-white/90 mb-8 uppercase tracking-widest flex items-center gap-2">
               <div className="w-2 h-2 bg-[var(--green)]" />
               Core_Model_Distribution
             </h3>
@@ -151,8 +151,8 @@ export default function AnalyticsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={modelUsageData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                  <XAxis dataKey="name" stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
-                  <YAxis stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="name" stroke="#888" fontSize={10} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#888" fontSize={10} axisLine={false} tickLine={false} />
                   <Tooltip 
                     contentStyle={{ background: '#0d0d0d', border: '1px solid #333' }}
                     itemStyle={{ color: '#00ff66' }}
@@ -170,7 +170,7 @@ export default function AnalyticsPage() {
             animate={{ opacity: 1 }}
             className="pixel-border bg-[#0d0d0d] p-6 h-[400px] flex flex-col"
           >
-            <h3 className="text-xs font-press-start text-[#444] mb-8 uppercase tracking-widest flex items-center gap-2">
+            <h3 className="text-xs font-press-start text-white/90 mb-8 uppercase tracking-widest flex items-center gap-2">
               <div className="w-2 h-2 bg-purple-500" />
               Efficiency_Analysis
             </h3>
@@ -206,7 +206,7 @@ export default function AnalyticsPage() {
             animate={{ opacity: 1 }}
             className="pixel-border bg-[#0d0d0d] p-6 h-[400px] flex flex-col lg:col-span-2"
           >
-             <h3 className="text-xs font-press-start text-[#444] mb-8 uppercase tracking-widest flex items-center gap-2">
+             <h3 className="text-xs font-press-start text-white/90 mb-8 uppercase tracking-widest flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500" />
               Node_Resource_Utilization // Token_Load
             </h3>
@@ -222,8 +222,8 @@ export default function AnalyticsPage() {
                   { name: '23:59', tokens: 300 },
                 ]}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={true} />
-                  <XAxis dataKey="name" stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
-                  <YAxis stroke="#444" fontSize={10} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="name" stroke="#888" fontSize={10} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#888" fontSize={10} axisLine={false} tickLine={false} />
                   <Tooltip 
                     contentStyle={{ background: '#0d0d0d', border: '1px solid #333' }}
                     itemStyle={{ color: '#00E5FF' }}

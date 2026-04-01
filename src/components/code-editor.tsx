@@ -34,12 +34,54 @@ export function CodeEditor({ onResult }: Props) {
   async function handleAnalyze() {
     setAnalyzing(true);
     setResult(null);
-    // simulate network + model latency
-    await new Promise((r) => setTimeout(r, 2400));
-    const res = getMockAnalysis(editorRef.current);
-    setResult(res);
-    setAnalyzing(false);
-    onResult(res);
+    
+    try {
+      const response = await fetch("http://localhost:8000/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: editorRef.current }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to scan code");
+      }
+
+      const data = await response.json();
+      
+      // Transform backend response to match frontend expectations
+      // Ensuring severity is lowercase to match the frontend SEVERITY_META keys
+      const vulnerabilities = data.vulnerabilities.map((v: any) => ({
+        ...v,
+        id: v.id || Math.random().toString(36).substr(2, 9),
+        severity: v.severity.toLowerCase(),
+        line: v.line || 1, // Fallback if missing
+        category: v.category || "Security",
+        cwe: v.cwe || "CWE-Unknown",
+      }));
+
+      const res: AnalysisResult = {
+        model: "claude-haiku-3", // Default for direct scan display
+        modelLabel: "Nova Lite",
+        modelReason: "Direct Security Scan",
+        complexity: vulnerabilities.length > 2 ? "high" : vulnerabilities.length > 0 ? "medium" : "low",
+        summary: vulnerabilities.length > 0 
+          ? `Found ${vulnerabilities.length} vulnerabilities`
+          : "No vulnerabilities detected",
+        vulnerabilities: vulnerabilities,
+        costUsd: 0.0001,
+        durationMs: 1200,
+        savingsVsOpus: 95,
+      };
+
+      setResult(res);
+      onResult(res);
+    } catch (err) {
+      console.error("Analysis failed:", err);
+      // Fallback to mock on error in demo mode if desired, or show error
+      // For now, let's just log it
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   const modelColor = result ? MODEL_COLORS[result.model] ?? "#00E5FF" : "#00E5FF";

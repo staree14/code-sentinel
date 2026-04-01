@@ -64,7 +64,7 @@ print("Analyzing SQL Injection Example...")
 print("=" * 50)
 
 response = client.models.generate_content(
-    model='gemini-2.5-flash',
+    model='gemini-2.0-flash',
     contents=security_prompt.format(code=vulnerable_code_1)
 )
 print(response.text)
@@ -75,7 +75,7 @@ print("Analyzing Hardcoded Credentials Example...")
 print("=" * 50)
 
 response = client.models.generate_content(
-    model='gemini-2.5-flash',
+    model='gemini-2.0-flash',
     contents=security_prompt.format(code=vulnerable_code_2)
 )
 print(response.text)
@@ -86,7 +86,7 @@ print("Analyzing Weak Cryptography Example...")
 print("=" * 50)
 
 response = client.models.generate_content(
-    model='gemini-2.5-flash',
+    model='gemini-2.0-flash',
     contents=security_prompt.format(code=vulnerable_code_3)
 )
 print(response.text)

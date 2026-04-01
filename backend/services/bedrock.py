@@ -47,33 +47,18 @@ def invoke_nova(prompt: str, model_id: str) -> str:
     ------
     RuntimeError if the Bedrock call fails.
     """
-    # Amazon Nova native request body
-    body = json.dumps(
-        {
-            "messages": [
+    try:
+        client = _get_client()
+        response = client.converse(
+            modelId=model_id,
+            messages=[
                 {
                     "role": "user",
                     "content": [{"text": prompt}],
                 }
-            ],
-            "inferenceConfig": {
-                "maxTokens": 1024,
-                "temperature": 0.7,
-                "topP": 0.9,
-            },
-        }
-    )
-
-    try:
-        client = _get_client()
-        response = client.invoke_model(
-            modelId=model_id,
-            body=body,
-            contentType="application/json",
-            accept="application/json",
+            ]
         )
-        result = json.loads(response["body"].read())
-        return result["output"]["message"]["content"][0]["text"]
+        return response["output"]["message"]["content"][0]["text"]
 
     except (BotoCoreError, ClientError) as exc:
         raise RuntimeError(f"Bedrock invocation failed: {exc}") from exc

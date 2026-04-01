@@ -68,7 +68,7 @@ export function Nav() {
           className="btn-secondary-pixel"
           style={{ fontSize: "0.55rem", borderColor: "var(--pixel-purple)", color: "var(--pixel-purple)" }}
         >
-          {pathname === "/scanner" ? "← BACK" : "AGENT TERMINAL"}
+          {pathname === "/scanner" ? "← BACK" : "DASHBOARD"}
         </Link>
         <Link
           href="/demo"

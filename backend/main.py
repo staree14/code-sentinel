@@ -8,7 +8,7 @@ and the /api/scan route (Direct Bedrock Security Agent).
 
 import time
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -75,9 +75,9 @@ class Vulnerability(BaseModel):
     id: str
     title: str
     severity: str
-    line: int
-    category: str
-    cwe: str
+    line: Optional[int] = None
+    category: Optional[str] = None
+    cwe: Optional[str] = None
     description: str
     fix: str
 

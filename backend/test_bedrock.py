@@ -1,7 +1,14 @@
 import boto3
 import json
+import os
+from dotenv import load_dotenv
 
+# 1. Load the credentials from your .env file
+load_dotenv() 
+
+# 2. Now initialize the client (Boto3 will automatically find the keys now)
 bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+
 
 def test_nova():
     model_id = "amazon.nova-lite-v1:0"

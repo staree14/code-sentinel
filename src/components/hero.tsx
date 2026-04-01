@@ -110,7 +110,7 @@ export function Hero() {
             transition={{ delay: 1 }}
             className="flex flex-wrap gap-4 mb-16"
           >
-            <Link href="/demo" className="btn-primary-pixel">
+            <Link href="/dashboard" className="btn-primary-pixel">
               ► TRY LIVE DEMO
             </Link>
             <a href="/architecture" className="btn-secondary-pixel">

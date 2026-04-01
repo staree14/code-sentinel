@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { CodeEditor } from "@/components/code-editor";
 import { SecurityReport } from "@/components/security-report";
@@ -21,6 +22,14 @@ const COMPARISON = [
 export default function DemoPage() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
+  const router = useRouter();
+
+  useEffect(() => {
+    const email = localStorage.getItem("user_email");
+    if (!email) {
+      router.push("/login");
+    }
+  }, []);
 
   function handleResult(r: AnalysisResult) {
     setResult(r);

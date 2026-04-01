@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Code, GitBranch, Terminal, AlertTriangle, ShieldCheck, FileCode2, Loader2, ArrowLeft, Send, Sparkles, Activity, Wrench, ChevronDown, ChevronUp, Bot, User, CheckCircle, Copy, Check } from "lucide-react";
+import { Upload, Code, GitBranch, Terminal, AlertTriangle, ShieldCheck, FileCode2, Loader2, Send, Sparkles, Activity, Wrench, ChevronDown, ChevronUp, Bot, User, CheckCircle, Copy, Check } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
+import { Nav } from "@/components/nav";
 
 const MAX_PASTE_CHARS = 1000;
 const MAX_FILE_SIZE_MB = 1;
@@ -181,28 +182,8 @@ export default function InteractiveDashboard() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-bg text-pixel-text font-ibm-plex overflow-hidden pb-[80px]">
-
-      {/* ── 1. Independent Navbar ── */}
-      <header className="flex items-center justify-between px-6 py-4 bg-bg3 border-b border-pixel-border z-10">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-3 text-muted hover:text-pixel-text transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-6 h-6 text-pixel-green" />
-            <h1 className="font-press-start text-xs text-pixel-green tracking-widest leading-none mt-1">SECURITY DASHBOARD</h1>
-          </div>
-        </div>
-
-        <button
-          onClick={() => setShowAnalytics(!showAnalytics)}
-          className={`flex items-center gap-2 px-4 py-2 border rounded-sm text-xs font-mono transition-colors ${showAnalytics ? 'bg-pixel-blue/10 border-pixel-blue text-pixel-blue shadow-[0_0_15px_rgba(56,139,253,0.3)]' : 'border-pixel-border text-muted hover:text-pixel-text'}`}
-        >
-          <Activity className="w-4 h-4" />
-          ANALYTICS {showAnalytics ? 'ON' : 'OFF'}
-        </button>
-      </header>
+    <div className="flex flex-col min-h-screen bg-bg text-pixel-text font-ibm-plex overflow-hidden pb-[80px] pt-[72px]">
+      <Nav />
 
       {/* ── 2. Main Workspace ── */}
       <main className="flex-1 flex overflow-hidden">

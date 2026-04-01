@@ -10,11 +10,13 @@ Flow: POST /process
 """
 
 import time
+import traceback
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Load .env before anything that reads env-vars (boto3 client, etc.)
 load_dotenv()
@@ -27,7 +29,7 @@ from models.schemas import (
     RoutingDecision,
     SecurityScan,
 )
-from services.bedrock import invoke_nova
+from services.bedrock import SECURITY_SYSTEM, invoke_nova
 from services.classifier import analyze_prompt
 from services.router import get_route
 from utils.loggers import get_logger
@@ -56,6 +58,29 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+# ── Global exception handlers ──────────────────────────────────────────────────
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """
+    Catch any exception that slips past route-level try/except blocks.
+    Returns a clean 500 JSON instead of a cryptic 422 response-model error.
+    """
+    logger.error(
+        "Unhandled exception on %s %s: %s",
+        request.method, request.url.path, exc,
+        exc_info=True,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "detail": str(exc),
+            "type": type(exc).__name__,
+        },
+    )
 
 # CORS — allow all origins for frontend integration (tighten in production)
 app.add_middleware(
@@ -117,10 +142,14 @@ async def process_prompt(request: PromptRequest):
 
     logger.info("Routed to %s (%s)", route["model_name"], route["model_id"])
 
-    # ── Step 3: Invoke Bedrock (boto3 — unchanged) ────────────────────────────
+    # ── Step 3: Invoke Bedrock (boto3 — unchanged structure) ─────────────────
+    # Choose system prompt based on intent so Bedrock's content filter
+    # does not block legitimate security / code analysis requests.
+    system_prompt = SECURITY_SYSTEM if intent in ("Security", "Code") else None
+
     t0 = time.perf_counter()
     try:
-        answer = invoke_nova(prompt, route["model_id"])
+        answer = invoke_nova(prompt, route["model_id"], system_prompt=system_prompt)
     except RuntimeError as exc:
         logger.exception("Bedrock invocation failed")
         raise HTTPException(status_code=502, detail=str(exc))

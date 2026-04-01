@@ -7,11 +7,12 @@ and the /api/scan route (Direct Bedrock Security Agent).
 """
 
 import time
+import traceback
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -36,7 +37,7 @@ from models.schemas import (
     RoutingDecision,
     SecurityScan,
 )
-from services.bedrock import invoke_nova
+from services.bedrock import SECURITY_SYSTEM, invoke_nova
 from services.classifier import analyze_prompt
 from services.router import get_route
 from utils.loggers import get_logger

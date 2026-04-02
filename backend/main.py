@@ -234,8 +234,8 @@ async def health_check():
 
 @app.post("/process", response_model=ProcessResponse, tags=["Inference"])
 @limiter.limit("10/minute")
-async def process_prompt(request: PromptRequest, req: Request, background_tasks: BackgroundTasks):
-    prompt = request.prompt
+async def process_prompt(req_data: PromptRequest, request: Request, background_tasks: BackgroundTasks):
+    prompt = req_data.prompt
     
     # Run Health Guard
     is_safe, msg = health_guard_scan(prompt)
@@ -303,24 +303,24 @@ async def process_prompt(request: PromptRequest, req: Request, background_tasks:
 
 @app.post("/api/scan", response_model=ScanResponse, tags=["Security"])
 @limiter.limit("5/minute")
-async def analyze_code(request: ScanRequest, req: Request, background_tasks: BackgroundTasks):
+async def analyze_code(req_data: ScanRequest, request: Request, background_tasks: BackgroundTasks):
     # Run Health Guard
-    is_safe, msg = health_guard_scan(request.code)
+    is_safe, msg = health_guard_scan(req_data.code)
     if not is_safe:
         raise HTTPException(status_code=400, detail=msg)
         
     try:
-        if not request.code or request.code.strip() == "":
+        if not req_data.code or req_data.code.strip() == "":
             raise HTTPException(status_code=400, detail="Code cannot be empty")
             
         # Try scanning with Bedrock (LLM)
         try:
-            results = scan_code(request.code)
+            results = scan_code(req_data.code)
         except Exception as e:
             logger.warning(f"Bedrock scan failed: {str(e)}. Falling back to local engine.")
             from analyzer import analyze
             # Use 'internal' as a generic extension for local routing
-            local_res = analyze(request.code, "scanner_input.py") 
+            local_res = analyze(req_data.code, "scanner_input.py") 
             results = [
                 {
                     "id": item.get("id", "L-000"),
@@ -342,8 +342,8 @@ async def analyze_code(request: ScanRequest, req: Request, background_tasks: Bac
             "modelUsed": "Amazon Nova Lite", # Fixed for now/demo
             "risk": "Analyzed",
             "complexity": "Code Scan",
-            "inputLength": len(request.code),
-            "tokens": len(request.code) // 4, # Rough estimate
+            "inputLength": len(req_data.code),
+            "tokens": len(req_data.code) // 4, # Rough estimate
             "cost": 0.0001, # Mock for demo
             "cost_saved": 0.005 # Mock for demo comparison to Pro
         }

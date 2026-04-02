@@ -56,6 +56,7 @@ export default function DashboardPage() {
   const [loadingScan, setLoadingScan] = useState(false);
   const [results, setResults] = useState<Vulnerability[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scanStage, setScanStage] = useState<"idle" | "simulating" | "analyzing">("idle");
 
   // UI state
   const [expandedFixes, setExpandedFixes] = useState<Record<string, boolean>>({});
@@ -95,6 +96,7 @@ export default function DashboardPage() {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const decorationsRef = useRef<string[]>([]);
+  const simDecorationsRef = useRef<string[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Monaco decorations
@@ -184,7 +186,37 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error(data.detail || "Scan failed.");
       setResults(data.vulnerabilities);
     } catch (err: any) { setScanError(err.message); }
-    finally { setLoadingScan(false); }
+    finally { setLoadingScan(false); setScanStage("idle"); }
+  };
+  
+  const handleSimulateAttack = async () => {
+    const payload = activeTab === "repo" ? `Analyze this GitHub Repository URL: ${repoUrl}` : code;
+    if (!payload) return setScanError("Please provide code or a repo URL.");
+    if (activeTab !== "repo" && code.length > MAX_PASTE_CHARS) return setScanError(`Exceeds ${MAX_PASTE_CHARS} char limit.`);
+
+    setResults(null); setFixedVulnIds([]); setScanError(null);
+    setScanStage("simulating");
+    
+    // Stage 1: Simulate Attack (with highlights)
+    const lineCount = code.split("\n").length;
+    const interval = setInterval(() => {
+      if (!editorRef.current) return;
+      const randomLine = Math.floor(Math.random() * lineCount) + 1;
+      const newDecs = [{
+        range: new monacoRef.current.Range(randomLine, 1, randomLine, 1),
+        options: { isWholeLine: true, className: "attacker-scan-highlight", glyphMarginClassName: "attacker-glyph" }
+      }];
+      simDecorationsRef.current = editorRef.current.deltaDecorations(simDecorationsRef.current, newDecs);
+    }, 150);
+
+    await new Promise(r => setTimeout(r, 2500));
+    clearInterval(interval);
+    if (editorRef.current) simDecorationsRef.current = editorRef.current.deltaDecorations(simDecorationsRef.current, []);
+    
+    setScanStage("analyzing");
+    
+    // Stage 2: Deep Analysis (Actually Trigger Scan)
+    handleScan();
   };
 
   const explainVulnerability = (title: string, desc: string) => {
@@ -214,8 +246,14 @@ export default function DashboardPage() {
     if (!original || !fixed) return;
     setCode(prev => {
       const next = prev.replace(original, fixed) !== prev ? prev.replace(original, fixed) : prev.replace(original.trim(), fixed.trim());
-      if (next !== prev) { if (vulnId) setFixedVulnIds(ids => [...ids, vulnId]); return next; }
-      setScanError("Auto-fix mismatch."); return prev;
+      if (next !== prev) { 
+        if (vulnId) setFixedVulnIds(ids => [...ids, vulnId]); 
+        // Trigger a briefly visible "flash" decoration for the fixed area
+        setTimeout(() => updateDecorations(), 10);
+        return next;
+      }
+      setScanError("Auto-fix mismatch. Try copying manually."); 
+      return prev;
     });
   };
 
@@ -285,11 +323,27 @@ export default function DashboardPage() {
 
               {scanError && <div className="mb-4 p-4 bg-pixel-red/10 border border-pixel-red/40 text-pixel-red text-xs flex items-center gap-3"><AlertTriangle className="w-4 h-4" /> {scanError}</div>}
 
-              <button onClick={handleScan} disabled={loadingScan || code.length > MAX_PASTE_CHARS}
-                className="w-full py-4 bg-pixel-green text-bg font-press-start text-[0.6rem] hover:bg-green-400 disabled:opacity-50 flex items-center justify-center gap-3 transition-all rounded-sm shadow-[0_4px_20px_rgba(57,211,83,0.15)]">
-                {loadingScan ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                {loadingScan ? "RUNNING..." : "LAUNCH SECURITY SCAN"}
-              </button>
+              <div className="flex flex-col gap-3">
+                <button onClick={handleSimulateAttack} disabled={scanStage !== "idle" || code.length > MAX_PASTE_CHARS}
+                  className="w-full py-4 bg-pixel-purple text-white font-press-start text-[0.6rem] hover:bg-purple-500 disabled:opacity-50 flex items-center justify-center gap-3 transition-all rounded-sm shadow-[0_0_30px_rgba(163,113,247,0.25)] relative overflow-hidden group">
+                  {scanStage === "simulating" ? (
+                    <><Activity className="w-4 h-4 animate-pulse" /> ATTACKER_SCANNING_SOFT_SPOTS...</>
+                  ) : scanStage === "analyzing" ? (
+                    <><Sparkles className="w-4 h-4 animate-spin" /> PROCESSING BY BEST LLM...</>
+                  ) : (
+                    <><AlertTriangle className="w-4 h-4 group-hover:animate-bounce" /> SIMULATE ATTACK DEMO</>
+                  )}
+                  {scanStage !== "idle" && (
+                    <motion.div initial={{ x: "-100%" }} animate={{ x: "100%" }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+                  )}
+                </button>
+
+                <button onClick={handleScan} disabled={scanStage !== "idle" || code.length > MAX_PASTE_CHARS}
+                  className="w-full py-3 border border-pixel-green/30 text-pixel-green text-[0.55rem] font-press-start hover:bg-pixel-green/5 disabled:opacity-30 disabled:border-pixel-border transition-all flex items-center justify-center gap-2 rounded-sm">
+                  <ShieldCheck className="w-3 h-3" /> LAUNCH STANDARD SCAN
+                </button>
+              </div>
             </div>
           </div>
 
@@ -475,8 +529,13 @@ export default function DashboardPage() {
       <style jsx global>{`
         .vulnerable-line-highlight { background: rgba(255,95,86,0.12) !important; }
         .vulnerable-glyph { background: #ff5f56 !important; width: 4px !important; margin-left: 2px !important; border-radius: 1px; }
-        .fixed-line-highlight { background: rgba(34,197,94,0.12) !important; }
+        .fixed-line-highlight { background: rgba(34,197,94,0.15) !important; border-left: 2px solid #22c55e; }
         .fixed-glyph { background: #22c55e !important; width: 4px !important; margin-left: 2px !important; border-radius: 1px; }
+        .attacker-scan-highlight { background: rgba(163,113,247,0.2) !important; border-top: 1px solid rgba(163,113,247,0.4); border-bottom: 1px solid rgba(163,113,247,0.4); }
+        .attacker-glyph { background: #a371f7 !important; width: 4px !important; margin-left: 2px !important; border-radius: 1px; box-shadow: 0 0 10px #a371f7; }
+        
+        .monaco-editor .margin-view-overlays .vulnerable-glyph:before { content: "!"; color: white; font-size: 8px; font-weight: bold; position: absolute; left: -2px; top: 2px; }
+        .monaco-editor .margin-view-overlays .attacker-glyph:before { content: "☠"; color: white; font-size: 10px; position: absolute; left: -3px; top: 1px; }
       `}</style>
     </div>
   );

@@ -57,6 +57,7 @@ export default function DashboardPage() {
   const [results, setResults] = useState<Vulnerability[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanStage, setScanStage] = useState<"idle" | "simulating" | "analyzing">("idle");
+  const [applyingFixId, setApplyingFixId] = useState<string | null>(null);
   const [attackLogs, setAttackLogs] = useState<{ type: "attacker" | "defender"; msg: string; time: string }[]>([]);
 
   // UI state
@@ -257,17 +258,96 @@ export default function DashboardPage() {
     finally { setLoadingChat(false); }
   };
 
+  // ── Smart Apply Fix: multi-strategy matching ─────────────────────────────────
+  const smartApplyFix = (currentCode: string, original: string, fixed: string): string | null => {
+    // Strategy 1: exact match
+    if (currentCode.includes(original)) return currentCode.replace(original, fixed);
+    // Strategy 2: trimmed match
+    const trimmedOrig = original.trim();
+    const trimmedFixed = fixed.trim();
+    if (currentCode.includes(trimmedOrig)) return currentCode.replace(trimmedOrig, trimmedFixed);
+    // Strategy 3: normalize internal whitespace (collapse runs of spaces/tabs, normalise newlines)
+    const normalize = (s: string) => s.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ").trim();
+    const normOrig = normalize(original);
+    const normCode = normalize(currentCode);
+    if (normCode.includes(normOrig)) {
+      // Re-apply on the real code: find the first line of the original and replace its region
+      const origLines = original.split(/\r?\n/);
+      const codeLines = currentCode.split(/\r?\n/);
+      for (let i = 0; i <= codeLines.length - origLines.length; i++) {
+        const slice = codeLines.slice(i, i + origLines.length);
+        if (normalize(slice.join("\n")) === normOrig) {
+          const fixedLines = fixed.split(/\r?\n/);
+          codeLines.splice(i, origLines.length, ...fixedLines);
+          return codeLines.join("\n");
+        }
+      }
+    }
+    // Strategy 4: fuzzy first-line anchor — find the start line, replace the block
+    const firstOrigLine = original.split(/\r?\n/)[0].trim();
+    const codeLines = currentCode.split(/\r?\n/);
+    const origLineCount = original.split(/\r?\n/).length;
+    const anchorIdx = codeLines.findIndex(l => l.trim() === firstOrigLine);
+    if (anchorIdx !== -1) {
+      const fixedLines = fixed.split(/\r?\n/);
+      codeLines.splice(anchorIdx, origLineCount, ...fixedLines);
+      return codeLines.join("\n");
+    }
+    return null; // all strategies failed
+  };
+
   const handleApplyFix = (original: string, fixed: string, vulnId?: string) => {
     if (!original || !fixed) return;
     setCode(prev => {
-      const next = prev.replace(original, fixed) !== prev ? prev.replace(original, fixed) : prev.replace(original.trim(), fixed.trim());
-      if (next !== prev) { 
-        if (vulnId) setFixedVulnIds(ids => [...ids, vulnId]); 
+      const next = smartApplyFix(prev, original, fixed);
+      if (next !== null && next !== prev) {
+        if (vulnId) setFixedVulnIds(ids => [...ids, vulnId]);
         setTimeout(() => updateDecorations(), 10);
-        return next; 
+        return next;
       }
-      setScanError("Auto-fix mismatch. Try copying manually."); return prev;
+      setScanError("Auto-fix could not locate the snippet. Please apply manually.");
+      return prev;
     });
+  };
+
+  // ── Dynamic Fix: call backend to generate + apply fix via LLM ────────────────
+  const handleDynamicFix = async (vuln: Vulnerability) => {
+    if (applyingFixId === vuln.id) return;
+    setApplyingFixId(vuln.id);
+    setScanError(null);
+    try {
+      const res = await fetch("http://localhost:8000/api/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          vulnerability_title: vuln.title,
+          vulnerability_description: vuln.description,
+          fix_advice: vuln.fix,
+          cwe: vuln.cwe,
+          line: vuln.line,
+        }),
+      });
+      if (!res.ok) throw new Error("Fix generation failed");
+      const data = await res.json();
+      if (!data.original_snippet || !data.fixed_snippet)
+        throw new Error("Backend did not return fix snippets");
+      // Update vuln state with the received snippets so APPLY FIX button works
+      setResults(prev =>
+        prev
+          ? prev.map(v =>
+              v.id === vuln.id
+                ? { ...v, original_snippet: data.original_snippet, fixed_snippet: data.fixed_snippet }
+                : v
+            )
+          : prev
+      );
+      handleApplyFix(data.original_snippet, data.fixed_snippet, vuln.id);
+    } catch (err: any) {
+      setScanError(`Dynamic fix failed: ${err.message}. Use SHOW FIX to apply manually.`);
+    } finally {
+      setApplyingFixId(null);
+    }
   };
 
   const toggleFix = (id: string) => setExpandedFixes(prev => ({ ...prev, [id]: !prev[id] }));
@@ -500,19 +580,36 @@ export default function DashboardPage() {
                     <button onClick={() => explainVulnerability(vuln.title, vuln.description)} className="px-3 py-1.5 bg-bg border border-pixel-border text-[10px] flex items-center gap-2 hover:text-pixel-purple transition-colors"><Sparkles className="w-3 h-3 text-pixel-purple" /> EXPLAIN</button>
                     <button
                       onClick={() => {
-                        if (fixedVulnIds.includes(vuln.id)) return;
-                        vuln.fixed_snippet
-                          ? handleApplyFix(vuln.original_snippet!, vuln.fixed_snippet!, vuln.id)
-                          : explainVulnerability(vuln.title, `Apply this fix to my code:\n\n${vuln.fix}`)
+                        if (fixedVulnIds.includes(vuln.id) || applyingFixId === vuln.id) return;
+                        if (vuln.fixed_snippet && vuln.original_snippet) {
+                          // Try smart apply first
+                          const result = smartApplyFix(code, vuln.original_snippet, vuln.fixed_snippet);
+                          if (result !== null && result !== code) {
+                            handleApplyFix(vuln.original_snippet, vuln.fixed_snippet, vuln.id);
+                          } else {
+                            // Snippet mismatch — fall back to dynamic LLM fix
+                            handleDynamicFix(vuln);
+                          }
+                        } else {
+                          // No snippet at all — call dynamic fix endpoint
+                          handleDynamicFix(vuln);
+                        }
                       }}
-                      disabled={fixedVulnIds.includes(vuln.id)}
+                      disabled={fixedVulnIds.includes(vuln.id) || applyingFixId === vuln.id}
                       className={`px-3 py-1.5 border text-[10px] font-bold flex items-center gap-2 transition-all ${
-                        fixedVulnIds.includes(vuln.id) 
-                          ? "bg-pixel-green text-bg border-pixel-green cursor-default" 
+                        fixedVulnIds.includes(vuln.id)
+                          ? "bg-pixel-green text-bg border-pixel-green cursor-default"
+                          : applyingFixId === vuln.id
+                          ? "bg-pixel-yellow/10 border-pixel-yellow/30 text-pixel-yellow animate-pulse cursor-wait"
                           : "bg-pixel-green/10 border-pixel-green/30 text-pixel-green hover:bg-pixel-green hover:text-bg"
                       }`}>
-                      {fixedVulnIds.includes(vuln.id) ? <CheckCircle className="w-3 h-3" /> : <Check className="w-3 h-3" />}
-                      {fixedVulnIds.includes(vuln.id) ? "FIXED" : vuln.fixed_snippet ? "APPLY FIX" : "QUICK FIX"}
+                      {fixedVulnIds.includes(vuln.id) ? (
+                        <><CheckCircle className="w-3 h-3" /> FIXED</>
+                      ) : applyingFixId === vuln.id ? (
+                        <><Loader2 className="w-3 h-3 animate-spin" /> PATCHING...</>
+                      ) : (
+                        <><Check className="w-3 h-3" /> {vuln.fixed_snippet ? "APPLY FIX" : "AUTO-FIX"}</>
+                      )}
                     </button>
                   </div>
                   <AnimatePresence>

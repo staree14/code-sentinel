@@ -94,7 +94,20 @@ class UserLogin(BaseModel):
 
 class ScanRequest(BaseModel):
     code: str
-    
+
+class FixRequest(BaseModel):
+    code: str
+    vulnerability_title: str
+    vulnerability_description: str
+    fix_advice: str
+    cwe: Optional[str] = None
+    line: Optional[int] = None
+
+class FixResponse(BaseModel):
+    original_snippet: Optional[str] = None
+    fixed_snippet: Optional[str] = None
+    message: str
+
 class Vulnerability(BaseModel):
     id: str
     title: str
@@ -352,6 +365,70 @@ async def analyze_code(req_data: ScanRequest, request: Request, background_tasks
         return ScanResponse(status="success", vulnerabilities=results)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/fix", response_model=FixResponse, tags=["Security"])
+@limiter.limit("10/minute")
+async def generate_fix(req_data: FixRequest, request: Request):
+    """
+    Dynamically generate a fix for a specific vulnerability in the submitted code.
+    Returns original_snippet (the vulnerable lines verbatim) and fixed_snippet (the corrected lines).
+    """
+    is_safe, msg = health_guard_scan(req_data.code)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail=msg)
+
+    system_prompt = """You are an expert AI security engineer.
+Your job is to locate a specific vulnerability in the provided code and produce a minimal surgical fix.
+
+CRITICAL INSTRUCTIONS:
+- YOU MUST ONLY RETURN A RAW JSON OBJECT. NO MARKDOWN, NO EXPLANATION, NO BACKTICKS.
+- The JSON must have exactly two keys: "original_snippet" and "fixed_snippet"
+- "original_snippet": copy the EXACT vulnerable lines verbatim from the code (preserve indentation)
+- "fixed_snippet": the corrected replacement lines (preserve indentation, minimal change)
+- If you cannot locate the vulnerability, return: {"original_snippet": null, "fixed_snippet": null}
+
+Example output:
+{
+  "original_snippet": "    query = \\"SELECT * FROM users WHERE id = \\" + user_id",
+  "fixed_snippet": "    query = \\"SELECT * FROM users WHERE id = %s\\"\\n    cursor.execute(query, (user_id,))"
+}"""
+
+    user_message = f"""CODE TO FIX:
+{req_data.code}
+
+VULNERABILITY TO FIX:
+Title: {req_data.vulnerability_title}
+Description: {req_data.vulnerability_description}
+Remediation Advice: {req_data.fix_advice}
+CWE: {req_data.cwe or "N/A"}
+Approximate Line: {req_data.line or "Unknown"}
+
+Find the exact vulnerable lines in the code above and return the original_snippet and fixed_snippet JSON."""
+
+    try:
+        response = bedrock.converse(
+            modelId="amazon.nova-lite-v1:0",
+            messages=[{"role": "user", "content": [{"text": user_message}]}],
+            system=[{"text": system_prompt}],
+        )
+        output_text = response["output"]["message"]["content"][0]["text"]
+
+        import re as _re
+        clean = _re.sub(r"^```[a-z]*\s*", "", output_text.strip(), flags=_re.IGNORECASE)
+        clean = _re.sub(r"\s*```$", "", clean)
+
+        parsed = json.loads(clean)
+        return FixResponse(
+            original_snippet=parsed.get("original_snippet"),
+            fixed_snippet=parsed.get("fixed_snippet"),
+            message="Fix generated successfully" if parsed.get("original_snippet") else "Vulnerability location not found",
+        )
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="LLM returned unparseable response")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Fix generation failed: {exc}")
+
+
 
 @app.get("/api/samples", tags=["Utilities"])
 async def list_samples():
